@@ -20,5 +20,12 @@
     "vault-lock",
     "grill",
     "session-mgmt"
-  ]
+  ],
+  "tier": "none",
+  "groups": [],
+  "repOf": [],
+  "home": null,
+  "model": "inherit",
+  "modelRationale": "Persona-less dependency plugin: it ships no agent of its own, so it runs on whatever model the consuming session runs. 'tier: none' = holds no place in the staff pecking order (wave-2 value, pending ratification 2026-09-07).",
+  "mandates": []
 }
