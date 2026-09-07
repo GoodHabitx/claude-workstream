@@ -73,3 +73,5 @@ Ballast never existed before tonight (E5) - it is built FIRST in the
 overall sequence (Ballast -> vault-lock -> grill -> workstream -> reinstall
 -> one restart, E7), which is why it is the one HARD dependency: nothing
 downstream has continuity to build on until it exists.
+
+> **Why `session-mgmt` is not in `plugin.json` `dependencies`** (2026-09-07): the harness resolves that array as *plugin* names in the marketplace and errors on an MCP server name (`Dependency "session-mgmt@staff-plugins" is not installed`). The session-mgmt MCP is therefore declared HERE, with its degrade rule, and probed at run time - not in the manifest.
