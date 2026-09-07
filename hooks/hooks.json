@@ -1,0 +1,87 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/boot.py\" \"${CLAUDE_PLUGIN_ROOT}\"; fi; done; echo \"NOTE (workstream boot): no Python interpreter resolved (tried python3, python, py -3, py) - workstream identity is NOT loaded this session.\" >&2; exit 0"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/ballast-dispatch.py\" SessionStart \"${CLAUDE_PLUGIN_ROOT}\"; fi; done; exit 0"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/ballast-dispatch.py\" UserPromptSubmit \"${CLAUDE_PLUGIN_ROOT}\"; fi; done; exit 0"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/remind.py\" \"${CLAUDE_PLUGIN_ROOT}\"; fi; done; exit 0"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/ballast-dispatch.py\" PostToolUse \"${CLAUDE_PLUGIN_ROOT}\"; fi; done; exit 0"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/precompact.py\" \"${CLAUDE_PLUGIN_ROOT}\"; fi; done; exit 0"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/ballast-dispatch.py\" PreCompact \"${CLAUDE_PLUGIN_ROOT}\"; fi; done; exit 0"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/ballast-dispatch.py\" Stop \"${CLAUDE_PLUGIN_ROOT}\"; fi; done; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}
