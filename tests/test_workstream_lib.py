@@ -26,7 +26,7 @@ class ConfigTests(unittest.TestCase):
         root = tempfile.mkdtemp(prefix="ws_plugin_root_")
         try:
             cfg = wslib.load_config(root)
-            self.assertEqual(cfg["state_root"], "staff/cos/workstreams")
+            self.assertEqual(cfg["state_root"], ".vault-meta/workstreams")
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
@@ -46,7 +46,7 @@ class ConfigTests(unittest.TestCase):
             with open(os.path.join(root, "config.json"), "w") as f:
                 f.write("{not json")
             cfg = wslib.load_config(root)
-            self.assertEqual(cfg["state_root"], "staff/cos/workstreams")
+            self.assertEqual(cfg["state_root"], ".vault-meta/workstreams")
         finally:
             shutil.rmtree(root, ignore_errors=True)
 

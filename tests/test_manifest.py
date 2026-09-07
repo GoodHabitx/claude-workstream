@@ -154,7 +154,7 @@ class AppendAbsorbedTests(unittest.TestCase):
 
     def test_append_absorbed_is_additive(self):
         mprim.append_absorbed(self.vault, "overtaker", "stale-ws", "stale-born",
-                              "staff/cos/workstreams/stale-born", "path/to.jsonl", root=self.root)
+                              ".vault-meta/workstreams/stale-born", "path/to.jsonl", root=self.root)
         data, _ = wslib.read_manifest(self.vault, "overtaker", self.root)
         self.assertEqual(len(data["absorbed"]), 1)
         self.assertEqual(data["absorbed"][0]["born_session"], "stale-born")

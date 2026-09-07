@@ -7,7 +7,7 @@ plugin does:
     import workstream_lib as wslib
 before use (same convention cos_workstream_lib.py established).
 
-Model source: staff/cos/workstreams/74a8ddcb.../models/src/04*.md +
+Model source: .vault-meta/workstreams/74a8ddcb.../models/src/04*.md +
 _decisions.md (I1-I7, L1-L8, R1-R6, X1-X10, E1-E7). Ported from cos 0.20.0's
 cos_workstream_lib.py, cos-boot.py's workstream-binding helpers, and
 workstream-index.py's manifest-scan/anomaly logic - config-driven, no
@@ -38,7 +38,7 @@ VAULT_MARKERS = ("staff",)
 WS_BINDING_CAP = 8192       # byte cap on a sidecar file we will read
 MANIFEST_CAP = WS_BINDING_CAP * 4   # byte cap on a workstream.json we will read
 
-DEFAULT_CONFIG = {"state_root": "staff/cos/workstreams"}
+DEFAULT_CONFIG = {"state_root": ".vault-meta/workstreams"}
 
 
 # --------------------------------------------------------------------------
@@ -76,7 +76,7 @@ def load_config(root=None):
 
 def state_root(vault, root=None):
     """Absolute path to the workstreams state root (config-driven; default
-    staff/cos/workstreams - the 42 existing dirs keep working with no move
+    .vault-meta/workstreams - the 42 existing dirs keep working with no move
     tonight, per 04i)."""
     cfg = load_config(root)
     parts = cfg["state_root"].split("/")
@@ -86,7 +86,7 @@ def state_root(vault, root=None):
 def sessions_root(vault, root=None):
     """Absolute path to the sidecar directory - the SIBLING of the state
     root's own parent, named workstream-sessions (matches cos's
-    staff/cos/workstreams + staff/cos/workstream-sessions layout exactly;
+    .vault-meta/workstreams + .vault-meta/workstream-sessions layout exactly;
     not a second config value, since it is always the state root's own
     sibling by construction)."""
     sr = state_root(vault, root)

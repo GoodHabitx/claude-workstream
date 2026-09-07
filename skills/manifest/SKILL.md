@@ -7,7 +7,7 @@ description: Set a field on this session's own workstream manifest — who it re
 
 Shares the shared model: `${CLAUDE_PLUGIN_ROOT}/docs/workstream-model.md`.
 
-Own `staff/cos/workstreams/<born_session>/workstream.json` (path from
+Own `.vault-meta/workstreams/<born_session>/workstream.json` (path from
 `workstream_lib.state_root()` / `config.json`'s `state_root`) — the
 schema-authority primitive every composite verb (`fork`, `refocus`,
 `connect`, `absorb`, `close`, `adopt`) routes its manifest writes

@@ -7,7 +7,7 @@ description: Resolve, write, self-heal, or check this session's sidecar — the 
 
 Shares the shared model: `${CLAUDE_PLUGIN_ROOT}/docs/workstream-model.md`.
 
-The sidecar primitive (I5, L3): `staff/cos/workstream-sessions/<session_id>.json`
+The sidecar primitive (I5, L3): `.vault-meta/workstream-sessions/<session_id>.json`
 maps THIS conversation's rotating transcript id → the workstream's
 durable `born_session`. Disposable and self-healing by design — losing
 one is never a failure of the workstream itself, only of this one
@@ -82,7 +82,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 
 The sidecar is disposable by design (I2) — it exists only to make the
 common-case lookup (transcript id → born_session) cheap; the manifest
-under `staff/cos/workstreams/<born_session>/` is the durable record.
+under `.vault-meta/workstreams/<born_session>/` is the durable record.
 This skill never mints a `born_session` and never writes a manifest
 field — a genuinely new workstream is `workstream:adopt`'s job, not
 this one's. A missing or stale sidecar is reported LOUDLY, never

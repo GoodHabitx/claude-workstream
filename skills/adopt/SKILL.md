@@ -61,7 +61,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 5. **Check for an existing manifest with this NAME** (a different
    `born_session` already using it): scan the state root's manifests
    (`python3 scripts/views.py regen --dry-run` reads them all; or list
-   `staff/cos/workstreams/*/workstream.json` and grep each `name`
+   `.vault-meta/workstreams/*/workstream.json` and grep each `name`
    field) for a `name` match:
    - **A live session is already bound to it** → STOP, report it — one
      session per workstream.

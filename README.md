@@ -16,7 +16,7 @@ see `docs/dependencies.md` and each script's own module docstring.
 ## What
 
 - `config.json` - the ONE config value: `state_root` (default
-  `staff/cos/workstreams` - the 42 existing dirs keep working with no move
+  `.vault-meta/workstreams` - the 42 existing dirs keep working with no move
   tonight).
 - `scripts/workstream_lib.py` - shared, import-only module: config/path
   resolution, the session->workstream binding read, the ONE manifest-scan

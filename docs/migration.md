@@ -14,14 +14,14 @@ calls + 42 literal `"staff/cos"` strings scattered across
 `workstream-precompact.py`. No `config.json` at all.
 
 Target (this repo): ONE value, `config.json`'s `state_root` (default
-`staff/cos/workstreams`), read through exactly one helper
+`.vault-meta/workstreams`), read through exactly one helper
 (`workstream_lib.state_root()`) everywhere a script needs the state root;
 `workstream_lib.sessions_root()` derives the sidecar directory as that
 root's own sibling (`workstream-sessions`), never a second config value.
 
 **The 42 existing workstream dirs and 43 sidecars do not move tonight** -
 the default `state_root` points at exactly where they already live
-(`staff/cos/workstreams`), so this plugin reads and writes the SAME dirs
+(`.vault-meta/workstreams`), so this plugin reads and writes the SAME dirs
 cos 0.20.0 used, with zero data migration. A future actual move (e.g. to
 `staff/workstream/...` once cos's own directory is retired) becomes a
 one-line `config.json` edit plus a single `git mv` of the directory tree -
@@ -103,3 +103,7 @@ so this repo authored its own set and exceeded it; see the top-level
 declared as a soft dependency with `.vault-meta/bin/vault-lock.sh`
 already the extracted plugin's own stable path, `grill` declared as a
 soft dependency with `workstream_lib.grill_available()` as the detector.
+
+## State root moved 2026-09-07
+
+The principal moved the tree: `staff/cos/workstreams` -> `.vault-meta/workstreams` (manifests + hot/log/policy caches + index, tracked in git) and `staff/cos/workstream-sessions` -> `.vault-meta/workstream-sessions` (sidecars, gitignored). `config.json` `state_root` now defaults to `.vault-meta/workstreams`; the sidecar dir stays the sibling `workstream-sessions` of the root's parent. An empty `staff/cos/workstreams/` shell with a README tombstone may linger until the process holding it lets go.

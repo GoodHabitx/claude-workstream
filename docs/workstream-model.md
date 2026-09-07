@@ -101,7 +101,7 @@ the **bare uuid** — strip the `local_` prefix before writing it anywhere
   written; no manifest ⇒ no workstream. The manifest lives at
   `<state_root>/<born_session>/workstream.json` (`<state_root>` =
   `workstream_lib.state_root()`, config-driven, default
-  `staff/cos/workstreams`) — the dir name IS the durable key (see
+  `.vault-meta/workstreams`) — the dir name IS the durable key (see
   "Storage," below).
 - **The chain extends** by **resume** (same session, same sidebar uuid —
   nothing new to record) or **fork** (a new session, new sidebar uuid,
@@ -401,7 +401,7 @@ wiki node, no vault-side storage at all.
 - `<state_root>/workstream-graph.md` — **generated, git-tracked**: the
   mermaid graph, written by the same `scripts/views.py`.
 - the sessions dir (`workstream_lib.sessions_root()`, the state root's own
-  sibling, default `staff/cos/workstream-sessions`) —
+  sibling, default `.vault-meta/workstream-sessions`) —
   `<session_id>.json` — **ephemeral, gitignored**: the sidecar keyed by
   the volatile transcript id. A within-run convenience, self-healing, not
   content.

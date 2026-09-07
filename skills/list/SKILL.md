@@ -22,7 +22,7 @@ session titles and workstream manifests.
    Keep only titles matching `^ws-` (canonical) or `^cos:` (legacy).
 
 2. **Gather manifests.** Scan every `workstream.json` under the state
-   root (`config.json`'s `state_root`, default `staff/cos/workstreams`)
+   root (`config.json`'s `state_root`, default `.vault-meta/workstreams`)
    via `python3 scripts/views.py regen --dry-run` (reads and reports
    without writing) or by reading each manifest directly.
 
@@ -64,7 +64,7 @@ session titles and workstream manifests.
    `born_session`, stored nowhere), and **collaborate links**
    (bidirectional, peer, no authority — flag any one-sided link where
    the counterpart doesn't list the mirror). Point to
-   `staff/cos/workstreams/index.md` and `staff/cos/workstream-graph.md`
+   `.vault-meta/workstreams/index.md` and `staff/cos/workstream-graph.md`
    as the durable, regenerated cross-session views when they exist.
 
 5. **Never write anything** — no title, sidecar, or manifest. Pure
