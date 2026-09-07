@@ -100,13 +100,13 @@ class SidecarCLITests(unittest.TestCase):
         proc = self._run("write", "sess-cli-dry", "born-cli-dry", "--dry-run")
         self.assertEqual(proc.returncode, 0)
         self.assertIn("DRY-RUN", proc.stdout)
-        sidecar_path = os.path.join(self.vault, "staff", "cos", "workstream-sessions", "sess-cli-dry.json")
+        sidecar_path = os.path.join(self.vault, ".vault-meta", "workstream-sessions", "sess-cli-dry.json")
         self.assertFalse(os.path.isfile(sidecar_path))
 
     def test_cli_write_then_resolve(self):
         proc = self._run("write", "sess-cli-2", "born-cli")
         self.assertEqual(proc.returncode, 0)
-        os.makedirs(os.path.join(self.vault, "staff", "cos", "workstreams", "born-cli"))
+        os.makedirs(os.path.join(self.vault, ".vault-meta", "workstreams", "born-cli"))
         proc = self._run("resolve", "sess-cli-2")
         self.assertEqual(proc.returncode, 0)
         data = json.loads(proc.stdout)

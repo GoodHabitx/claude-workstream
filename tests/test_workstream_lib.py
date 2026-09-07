@@ -56,8 +56,8 @@ class ConfigTests(unittest.TestCase):
             root = tempfile.mkdtemp(prefix="ws_plugin_root_")
             sr = wslib.state_root(vault, root)
             sess = wslib.sessions_root(vault, root)
-            self.assertEqual(sr, os.path.join(vault, "staff", "cos", "workstreams"))
-            self.assertEqual(sess, os.path.join(vault, "staff", "cos", "workstream-sessions"))
+            self.assertEqual(sr, os.path.join(vault, ".vault-meta", "workstreams"))
+            self.assertEqual(sess, os.path.join(vault, ".vault-meta", "workstream-sessions"))
             shutil.rmtree(root, ignore_errors=True)
         finally:
             shutil.rmtree(vault, ignore_errors=True)
