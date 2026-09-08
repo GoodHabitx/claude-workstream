@@ -41,16 +41,48 @@ project/spine node.
    `null` (never a list); `collaborate` a list of `{name, session, scope}`; `refocused`/`previous_names`/`projects`/`maintains`/
    `absorbed` are arrays. An **active** manifest carrying legacy
    `parents`/`parent`/`parent_session`/`rebound` is flagged (dropped
-   fields per the schema — offer a strip via step 4's field write, any
+   fields per the schema — offer a strip via step 5's field write, any
    field write on this manifest already drops them). Confirm `hot.md`
    exists under the ws_dir (Ballast's job, not this skill's to create).
 
-4. **Field-change writes — route to the right `manifest.py` subcommand,
+4. **Four fields are APPROVAL-GATED. Show Adam the exact change, then
+   mint.** `maintains`, `direct_report`, `collaborate` and `absorbed`
+   reshape the fleet — who this workstream answers to, who it works
+   with, what it owns, what it swallowed — and each shows up in another
+   workstream's own graph, so an unreviewed edit silently rewires the
+   org chart. `manifest.py` refuses a change to one of them without a
+   fresh approval token (exit 2, the mint command on stderr). Every
+   other field — `state`, `focus`, `name`, lineage, the immutables, the
+   append-only arrays, `last_touched` — is written with no ceremony.
+
+   Before any write marked **(gated)** below:
+
+   a. Print the change EXACTLY: the field, its value NOW (read it from
+      the manifest — do not recall it), and its value AFTER, both in
+      full. For a list, show the whole list before and after, not the
+      delta; the point is that he sees what will be on disk.
+   b. Wait for an explicit yes. Silence, "sounds good" to something
+      else, or a reply to a different question is not a yes.
+   c. Mint the one-time approval:
+      ```
+      approve.py mint --scope <ws_dir>/ballast.json --file <ws_dir>/workstream.json --field <field>
+      ```
+      (`approve.py` lives in the installed `ballast` plugin's `scripts/`;
+      `manifest.py` resolves it the same way, so run it from there.)
+   d. Run the `manifest.py` command. It consumes the approval — one
+      approval, one write. A second write needs a second yes.
+
+   No approval can be minted if `ballast` is not installed; the refusal
+   says so and names the deliberate escape hatch
+   (`ballast-gate.disabled` under the state root), which is an operator
+   decision, never this skill's to take.
+
+5. **Field-change writes — route to the right `manifest.py` subcommand,
    never hand-roll the JSON:**
    - **focus** → `manifest.py set <born_session> focus '"<text>"'`. Do
      **not** also touch the sidecar — that's `workstream:refocus`'s
      front-facing job, not this primitive's.
-   - **direct_report — set** → resolve the target's `born_session` by
+   - **direct_report — set (gated)** → resolve the target's `born_session` by
      reading ITS manifest (`manifest.py read <target-born-session>` — a
      read, never a write), then `manifest.py set <born_session> direct_report '"{\"name\":\"<target-name>\",\"session\":\"<target-born-session>\"}"'`.
      Refuse a self-report. Refuse (or warn loudly if the ask is
@@ -58,8 +90,8 @@ project/spine node.
      an immediate connect invariant-3 violation; point at the target's
      own `direct_report` instead. This same route is what a **re-home**
      is (used by `close`/`absorb`).
-   - **direct_report — clear** → `manifest.py set <born_session> direct_report null`.
-   - **collaborate — add** → resolve the peer's `born_session` (read
+   - **direct_report — clear (gated)** → `manifest.py set <born_session> direct_report null`.
+   - **collaborate — add (gated)** → resolve the peer's `born_session` (read
      its manifest; refuse if it doesn't resolve; refuse a
      self-collaboration) → `manifest.py collaborate-add <born_session> --peer-session <peer-born-session> --peer-name <peer-name> [--scope <text>]` (idempotent on a duplicate peer-session — the
      core script no-ops rather than double-adding). Then **reciprocity**:
@@ -70,7 +102,7 @@ project/spine node.
      target that looked reachable is WARN + PROCEED — the local half
      already stands; `connect`'s audit reconciles the one-sided edge
      later. Never hard-fail the op on a notify failure.
-   - **collaborate — remove** → `manifest.py collaborate-remove <born_session> --peer-session <peer-born-session>`. Reciprocity-
+   - **collaborate — remove (gated)** → `manifest.py collaborate-remove <born_session> --peer-session <peer-born-session>`. Reciprocity-
      remove the mirror the same way (notify live / vault-lock closed).
    - **refocused — append** → `manifest.py set <born_session> refocused '"<full-array-with-new-entry-appended>"'` (read current, append
      `{date, from_focus, to_focus, note}`, write back — append-only,
@@ -91,9 +123,9 @@ project/spine node.
    - **absorbed_by — set** → resolve the successor's `born_session`
      (read its manifest), refuse a self-succession, then `manifest.py set <born_session> absorbed_by '"<successor-name>"'` and
      `manifest.py set <born_session> absorbed_by_session '"<successor-born-session>"'` — set together with `state: absorbed`. This is `workstream:absorb`'s delegate write.
-   - **absorbed[] — append** → `manifest.py append-absorbed <born_session> --name <name> --absorbed-born-session <id> --dir <path> [--transcript <path>]`. This is `workstream:absorb`'s
+   - **absorbed[] — append (gated)** → `manifest.py append-absorbed <born_session> --name <name> --absorbed-born-session <id> --dir <path> [--transcript <path>]`. This is `workstream:absorb`'s
      delegate write (AB3, the determinism anchor) — never hand-rolled.
-   - **maintains[] — add/remove** → `manifest.py set <born_session> maintains '"<full-array>"'` (read current, add/remove the
+   - **maintains[] — add/remove (gated)** → `manifest.py set <born_session> maintains '"<full-array>"'` (read current, add/remove the
      wikilink or absolute path, write back). Lives in the manifest, not
      `policy.md` (I6) — `workstream:policy`'s `## Maintains` route is
      retired; this is the only place `maintains[]` is written.
@@ -114,12 +146,19 @@ project/spine node.
      the only route in this whole plugin that touches a manifest other
      than the caller's own.
 
-5. **Regenerate the fleet views** after any write: `python3 scripts/views.py regen`.
+6. **Regenerate the fleet views** after any write: `python3 scripts/views.py regen`.
 
-6. **Confirm** in one line: which field changed, old → new, and any
+7. **Confirm** in one line: which field changed, old → new, and any
    reciprocity notify performed.
 
 ## Discipline
+
+`maintains`/`direct_report`/`collaborate`/`absorbed` are approval-gated
+(step 4): show the exact before/after, get an explicit yes, mint, write —
+one approval, one write, never a standing pass. The gate proves only that
+the sanctioned path was used; what actually asks Adam is step 4's own
+procedure, so skipping it and minting first is the one way to make the
+whole mechanism meaningless.
 
 Single-writer-per-manifest, extended to every field write: a session
 sets a field only on its OWN `workstream.json`; a cross-manifest change

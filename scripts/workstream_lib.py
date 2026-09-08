@@ -454,10 +454,24 @@ def _plugin_present(name, marker_rel):
 REGISTRY_CAP = 1024 * 256   # byte cap on installed_plugins.json we will read
 
 
-def _ballast_marketplace_glob_hit(home):
+def _script_under(plugin_home, script_name):
+    """`<plugin_home>/scripts/<script_name>` in either layout - flat dev
+    clone first, then the highest versioned-cache dir - or None."""
+    flat = os.path.join(plugin_home, "scripts", script_name)
+    if os.path.isfile(flat):
+        return flat
+    for versioned in _semver_dirs(plugin_home):
+        candidate = os.path.join(versioned, "scripts", script_name)
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def _ballast_marketplace_script(home, script_name):
     """Step 2 of ballast_available()'s fallback chain: scan every
     marketplace dir under `<home>/.claude/plugins/cache/*/ballast/*/
-    scripts/ballast.py` (any marketplace, any version - first hit wins).
+    scripts/<script_name>` (any marketplace, any version - first hit
+    wins). Returns the path, or None.
 
     _plugin_roots()'s own HOME fallback (used when CLAUDE_PLUGIN_ROOT is
     unset) checks `<home>/.claude/plugins/cache/ballast/...` directly,
@@ -472,15 +486,37 @@ def _ballast_marketplace_glob_hit(home):
     try:
         marketplaces = os.listdir(cache)
     except OSError:
-        return False
+        return None
     for mkt in marketplaces:
-        ballast_dir = os.path.join(cache, mkt, "ballast")
-        if os.path.isfile(os.path.join(ballast_dir, "scripts", "ballast.py")):
-            return True
-        for versioned in _semver_dirs(ballast_dir):
-            if os.path.isfile(os.path.join(versioned, "scripts", "ballast.py")):
-                return True
-    return False
+        found = _script_under(os.path.join(cache, mkt, "ballast"), script_name)
+        if found:
+            return found
+    return None
+
+
+def _ballast_marketplace_glob_hit(home):
+    return _ballast_marketplace_script(home, "ballast.py") is not None
+
+
+def ballast_script(script_name):
+    """Absolute path to one of the INSTALLED ballast plugin's
+    `scripts/<script_name>`, or None when ballast cannot be found - the
+    same two path-based steps ballast_available() uses, in the same
+    order, so a caller that needs to actually RUN one of ballast's
+    scripts (manifest.py's approval gate runs `approve.py`) resolves it
+    exactly where the shim would.
+
+    Deliberately does NOT consult the installed-plugins registry:
+    that step is a belief, not a path, and there is nothing to execute
+    at the end of it."""
+    for root in _plugin_roots():
+        found = _script_under(os.path.join(root, "ballast"), script_name)
+        if found:
+            return found
+    home = os.environ.get("USERPROFILE") or os.environ.get("HOME")
+    if not home:
+        return None
+    return _ballast_marketplace_script(home, script_name)
 
 
 def _ballast_in_installed_registry(home):

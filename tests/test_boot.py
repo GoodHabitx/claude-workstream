@@ -7,6 +7,8 @@ malformed) against a purpose-built temp vault and asserts on stdout - the
 via sys.executable so the hook's own `if __name__` / reconfigure / outer
 seatbelt all run for real, exactly as the harness would invoke it.
 """
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -26,6 +28,22 @@ def make_vault():
     d = tempfile.mkdtemp(prefix="ws_boot_test_")
     os.makedirs(os.path.join(d, "staff"), exist_ok=True)
     return d
+
+
+def gated_fixture(vault, fn, *args, **kwargs):
+    """Run one of manifest.py's approval-gated primitives while BUILDING A
+    FIXTURE. The gate (B2) has no person to ask inside a test, so the
+    state root carries ballast's own documented off-switch, and that
+    switch's deliberately loud stderr note is swallowed here rather than
+    printed into the harness's output. The gate itself is tested in
+    tests/test_manifest.py; these tests are about boot.py's rendering."""
+    state_root = wslib.state_root(vault)
+    os.makedirs(state_root, exist_ok=True)
+    switch = os.path.join(state_root, "ballast-gate.disabled")
+    if not os.path.isfile(switch):
+        open(switch, "w").close()
+    with contextlib.redirect_stderr(io.StringIO()):
+        return fn(*args, **kwargs)
 
 
 def run_boot(vault, stdin_text=None):
@@ -103,7 +121,8 @@ class BootCraftedStdinTests(unittest.TestCase):
     def test_bound_full_identity_block(self):
         mprim.create_manifest(self.vault, "peer-born", "peer-ws", "peer focus")
         mprim.create_manifest(self.vault, "born-3", "my-ws", "get it done")
-        mprim.collaborate_add(self.vault, "born-3", "peer-born", "peer-ws", scope="shared work")
+        gated_fixture(self.vault, mprim.collaborate_add, self.vault, "born-3",
+                      "peer-born", "peer-ws", scope="shared work")
         sidecar.write(self.vault, "sess-3", "born-3")
         proc = run_boot(self.vault, json.dumps({"session_id": "sess-3"}))
         self.assertEqual(proc.returncode, 0)
@@ -166,8 +185,9 @@ class BootCraftedStdinTests(unittest.TestCase):
     def test_bound_identity_block_respects_cap(self):
         mprim.create_manifest(self.vault, "born-9", "ws9", "f")
         for i in range(30):
-            mprim.collaborate_add(self.vault, "born-9", "peer-%03d" % i, "a very long peer name " * 5,
-                                  scope="scope text " * 5)
+            gated_fixture(self.vault, mprim.collaborate_add, self.vault, "born-9",
+                          "peer-%03d" % i, "a very long peer name " * 5,
+                          scope="scope text " * 5)
         sidecar.write(self.vault, "sess-9", "born-9")
         proc = run_boot(self.vault, json.dumps({"session_id": "sess-9"}))
         self.assertEqual(proc.returncode, 0)
@@ -204,9 +224,10 @@ class BootCraftedStdinTests(unittest.TestCase):
     def test_bound_clean_manifest_with_real_peers_no_schema_note(self):
         mprim.create_manifest(self.vault, "peer-born-2", "peer-ws-2", "peer focus")
         mprim.create_manifest(self.vault, "born-11", "ws11", "f")
-        mprim.set_field(self.vault, "born-11", "direct_report",
-                        {"name": "peer-ws-2", "session": "peer-born-2"})
-        mprim.collaborate_add(self.vault, "born-11", "peer-born-2", "peer-ws-2", scope="shared")
+        gated_fixture(self.vault, mprim.set_field, self.vault, "born-11",
+                      "direct_report", {"name": "peer-ws-2", "session": "peer-born-2"})
+        gated_fixture(self.vault, mprim.collaborate_add, self.vault, "born-11",
+                      "peer-born-2", "peer-ws-2", scope="shared")
         sidecar.write(self.vault, "sess-11", "born-11")
         proc = run_boot(self.vault, json.dumps({"session_id": "sess-11"}))
         self.assertEqual(proc.returncode, 0)

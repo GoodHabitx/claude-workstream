@@ -54,6 +54,11 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
    sidecar (`born_session` match) — **best-effort**: transcripts can
    vanish from disk (measured), so omit `--transcript` rather than
    guess. The dir path is durable — always include it.
+   `absorbed[]` is **approval-gated**: go through `workstream:manifest`
+   step 4 — show Adam the entry that will be appended, get his yes, mint
+   the approval — before running the command. Without a fresh approval
+   `manifest.py` exits 2 and writes nothing. Same for the `maintains[]`
+   fold in step 4 below.
 
 4. **Carry — the overtaker adopts the mission.**
    - `focus` → `workstream:manifest` ("focus") on the overtaker's own

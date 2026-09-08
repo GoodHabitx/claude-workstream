@@ -22,6 +22,142 @@ def make_vault():
     return d
 
 
+# A stand-in for ballast's scripts/approve.py, implementing exactly the
+# convention docs/approval-gate.md documents: a token named for the sha1
+# of the target's CANONICAL path, under `<state-root>/.ballast-approvals/`
+# (the state root being the parent of the scope directory, or the nearest
+# existing approvals dir above the target when no scope is given), fresh
+# for a TTL, deleted on consume. Exit 0 succeeded / 1 refused / 2 usage.
+#
+# A stub rather than the real script because this repo's tests must not
+# depend on a sibling repo being checked out beside it; what is under test
+# here is manifest.py's own use of the seam - that it checks before
+# writing, consumes on success, refuses with the mint command, and never
+# gates an ungated field.
+STUB_APPROVE = r'''#!/usr/bin/env python3
+import hashlib, json, os, sys, time
+
+TTL = 600
+
+def canon(p):
+    return os.path.normcase(os.path.realpath(os.path.abspath(p)))
+
+def token_name(p):
+    return hashlib.sha1(canon(p).encode("utf-8")).hexdigest() + ".token"
+
+def approvals_dir(scope, target):
+    if scope:
+        return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(scope))),
+                            ".ballast-approvals")
+    cur = os.path.dirname(canon(target))
+    while True:
+        cand = os.path.join(cur, ".ballast-approvals")
+        if os.path.isdir(cand):
+            return cand
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            return None
+        cur = parent
+
+def main(argv):
+    action = argv[0] if argv else ""
+    opts = {}
+    i = 1
+    while i < len(argv) - 1:
+        if argv[i] in ("--file", "--scope", "--field"):
+            opts[argv[i][2:]] = argv[i + 1]
+            i += 2
+        else:
+            return 2
+    target = opts.get("file")
+    if action not in ("mint", "check", "consume") or not target:
+        return 2
+    if opts.get("scope") and not os.path.isfile(opts["scope"]):
+        return 2
+    directory = approvals_dir(opts.get("scope"), target)
+    if action == "mint":
+        if not directory:
+            return 2
+        os.makedirs(directory, exist_ok=True)
+        with open(os.path.join(directory, token_name(target)), "w") as handle:
+            json.dump({"minted": time.time(), "field": opts.get("field")}, handle)
+        return 0
+    if not directory:
+        return 1
+    path = os.path.join(directory, token_name(target))
+    if not os.path.isfile(path):
+        return 1
+    if action == "check":
+        with open(path) as handle:
+            age = time.time() - json.load(handle)["minted"]
+        return 0 if 0 <= age <= TTL else 1
+    os.unlink(path)
+    return 0
+
+sys.exit(main(sys.argv[1:]))
+'''
+
+
+class GatedTestCase(unittest.TestCase):
+    """Base for every test that touches an approval-gated field: installs
+    the stub ballast as a sibling plugin under CLAUDE_PLUGIN_ROOT and
+    points HOME at an empty directory, so resolution is deterministic and
+    a real ballast on the host can never leak in."""
+
+    def setUp(self):
+        self.vault = make_vault()
+        self.root = tempfile.mkdtemp(prefix="ws_plugin_root_")
+        self._old_env = dict(os.environ)
+        self.plugins_root = tempfile.mkdtemp(prefix="ws_plugins_root_")
+        self.own_root = os.path.join(self.plugins_root, "workstream")
+        os.makedirs(self.own_root)
+        ballast_scripts = os.path.join(self.plugins_root, "ballast", "scripts")
+        os.makedirs(ballast_scripts)
+        self.approve_py = os.path.join(ballast_scripts, "approve.py")
+        with open(self.approve_py, "w", newline="\n") as handle:
+            handle.write(STUB_APPROVE)
+        os.environ["CLAUDE_PLUGIN_ROOT"] = self.own_root
+        os.environ["HOME"] = tempfile.mkdtemp(prefix="ws_home_")
+        os.environ.pop("USERPROFILE", None)
+        self.extra_setup()
+
+    def extra_setup(self):
+        pass
+
+    def tearDown(self):
+        shutil.rmtree(self.vault, ignore_errors=True)
+        shutil.rmtree(self.root, ignore_errors=True)
+        shutil.rmtree(self.plugins_root, ignore_errors=True)
+        os.environ.clear()
+        os.environ.update(self._old_env)
+
+    def state_root(self):
+        return wslib.state_root(self.vault, self.root)
+
+    def scope_for(self, born_session):
+        """A ballast.json beside the manifest, as ballast-dispatch writes on
+        first use - `approve.py mint` needs one to find the state root."""
+        path = os.path.join(self.state_root(), born_session, "ballast.json")
+        if not os.path.isfile(path):
+            wslib.atomic_write_lf(path, '{"root": "."}\n')
+        return path
+
+    def mint(self, born_session, field):
+        proc = subprocess.run(
+            [sys.executable, self.approve_py, "mint",
+             "--scope", self.scope_for(born_session),
+             "--file", wslib.manifest_path_for(self.vault, born_session, self.root),
+             "--field", field], capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def token_count(self):
+        directory = os.path.join(self.state_root(), ".ballast-approvals")
+        return len(os.listdir(directory)) if os.path.isdir(directory) else 0
+
+    def disarm_gate(self):
+        open(os.path.join(self.state_root(), "ballast-gate.disabled"), "w").close()
+
+
 class CreateManifestTests(unittest.TestCase):
     def setUp(self):
         self.vault = make_vault()
@@ -61,15 +197,9 @@ class CreateManifestTests(unittest.TestCase):
         self.assertIsNone(data)
 
 
-class SetFieldTests(unittest.TestCase):
-    def setUp(self):
-        self.vault = make_vault()
-        self.root = tempfile.mkdtemp(prefix="ws_plugin_root_")
+class SetFieldTests(GatedTestCase):
+    def extra_setup(self):
         mprim.create_manifest(self.vault, "born-1", "a", "f", root=self.root)
-
-    def tearDown(self):
-        shutil.rmtree(self.vault, ignore_errors=True)
-        shutil.rmtree(self.root, ignore_errors=True)
 
     def test_set_focus(self):
         mprim.set_field(self.vault, "born-1", "focus", "a new focus", root=self.root)
@@ -90,6 +220,7 @@ class SetFieldTests(unittest.TestCase):
             mprim.set_field(self.vault, "born-1", "direct_report", "comms-desk", root=self.root)
 
     def test_set_direct_report_accepts_object(self):
+        self.mint("born-1", "direct_report")
         mprim.set_field(self.vault, "born-1", "direct_report", {"name": "up", "session": "s"}, root=self.root)
         data, _ = wslib.read_manifest(self.vault, "born-1", self.root)
         self.assertEqual(data["direct_report"]["name"], "up")
@@ -105,17 +236,12 @@ class SetFieldTests(unittest.TestCase):
             mprim.set_field(self.vault, "no-such-born", "focus", "x", root=self.root)
 
 
-class CollaborateTests(unittest.TestCase):
-    def setUp(self):
-        self.vault = make_vault()
-        self.root = tempfile.mkdtemp(prefix="ws_plugin_root_")
+class CollaborateTests(GatedTestCase):
+    def extra_setup(self):
         mprim.create_manifest(self.vault, "a", "a", "f", root=self.root)
 
-    def tearDown(self):
-        shutil.rmtree(self.vault, ignore_errors=True)
-        shutil.rmtree(self.root, ignore_errors=True)
-
     def test_add_is_additive(self):
+        self.mint("a", "collaborate")
         mprim.collaborate_add(self.vault, "a", "b", "peer-b", scope="shared thing", root=self.root)
         data, _ = wslib.read_manifest(self.vault, "a", self.root)
         self.assertEqual(len(data["collaborate"]), 1)
@@ -123,36 +249,43 @@ class CollaborateTests(unittest.TestCase):
         self.assertEqual(data["collaborate"][0]["scope"], "shared thing")
 
     def test_add_duplicate_is_idempotent_never_a_second_entry(self):
+        self.mint("a", "collaborate")
         mprim.collaborate_add(self.vault, "a", "b", "peer-b", root=self.root)
+        # No second mint: the duplicate is an idempotent no-op, so it must
+        # not demand (or spend) an approval of its own.
         mprim.collaborate_add(self.vault, "a", "b", "peer-b-renamed", root=self.root)
         data, _ = wslib.read_manifest(self.vault, "a", self.root)
         self.assertEqual(len(data["collaborate"]), 1)
 
     def test_add_never_touches_unrelated_entries(self):
+        self.mint("a", "collaborate")
         mprim.collaborate_add(self.vault, "a", "b", "peer-b", root=self.root)
+        self.mint("a", "collaborate")
         mprim.collaborate_add(self.vault, "a", "c", "peer-c", root=self.root)
         data, _ = wslib.read_manifest(self.vault, "a", self.root)
         self.assertEqual({e["session"] for e in data["collaborate"]}, {"b", "c"})
 
     def test_remove_drops_only_the_named_peer(self):
-        mprim.collaborate_add(self.vault, "a", "b", "peer-b", root=self.root)
-        mprim.collaborate_add(self.vault, "a", "c", "peer-c", root=self.root)
+        for peer, name in (("b", "peer-b"), ("c", "peer-c")):
+            self.mint("a", "collaborate")
+            mprim.collaborate_add(self.vault, "a", peer, name, root=self.root)
+        self.mint("a", "collaborate")
         mprim.collaborate_remove(self.vault, "a", "b", root=self.root)
         data, _ = wslib.read_manifest(self.vault, "a", self.root)
         self.assertEqual([e["session"] for e in data["collaborate"]], ["c"])
 
+    def test_remove_of_an_absent_peer_needs_no_approval(self):
+        mprim.collaborate_remove(self.vault, "a", "nobody", root=self.root)
+        data, _ = wslib.read_manifest(self.vault, "a", self.root)
+        self.assertEqual(data["collaborate"], [])
 
-class AppendAbsorbedTests(unittest.TestCase):
-    def setUp(self):
-        self.vault = make_vault()
-        self.root = tempfile.mkdtemp(prefix="ws_plugin_root_")
+
+class AppendAbsorbedTests(GatedTestCase):
+    def extra_setup(self):
         mprim.create_manifest(self.vault, "overtaker", "overtaker", "f", root=self.root)
 
-    def tearDown(self):
-        shutil.rmtree(self.vault, ignore_errors=True)
-        shutil.rmtree(self.root, ignore_errors=True)
-
     def test_append_absorbed_is_additive(self):
+        self.mint("overtaker", "absorbed")
         mprim.append_absorbed(self.vault, "overtaker", "stale-ws", "stale-born",
                               ".vault-meta/workstreams/stale-born", "path/to.jsonl", root=self.root)
         data, _ = wslib.read_manifest(self.vault, "overtaker", self.root)
@@ -161,6 +294,7 @@ class AppendAbsorbedTests(unittest.TestCase):
         self.assertEqual(data["absorbed"][0]["transcript"], "path/to.jsonl")
 
     def test_append_absorbed_duplicate_idempotent(self):
+        self.mint("overtaker", "absorbed")
         mprim.append_absorbed(self.vault, "overtaker", "stale-ws", "stale-born", "dir", root=self.root)
         mprim.append_absorbed(self.vault, "overtaker", "stale-ws", "stale-born", "dir", root=self.root)
         data, _ = wslib.read_manifest(self.vault, "overtaker", self.root)
@@ -223,6 +357,171 @@ class AbsorbCloseTests(unittest.TestCase):
         self.assertEqual(on_disk["state"], "active")   # nothing actually landed
 
 
+class ApprovalGateTests(GatedTestCase):
+    """B2: the gate is FIELD-AWARE. The four fleet-reshaping fields need a
+    fresh approval; everything else - above all the fields hooks write on
+    a cadence, such as last_touched - is never gated, because gating one
+    of those would fail every hook-driven manifest write in the vault."""
+
+    def extra_setup(self):
+        mprim.create_manifest(self.vault, "born-1", "a", "f", root=self.root)
+
+    # --- the ungated majority ------------------------------------------
+    def test_last_touched_is_never_gated(self):
+        mprim.set_field(self.vault, "born-1", "last_touched",
+                        "2026-09-08T00:00:00Z", root=self.root)
+        data, _ = wslib.read_manifest(self.vault, "born-1", self.root)
+        self.assertEqual(data["last_touched"], "2026-09-08T00:00:00Z")
+        self.assertEqual(self.token_count(), 0)
+
+    def test_every_ungated_field_writes_without_a_token(self):
+        for field, value in (("focus", "a new focus"), ("state", "closed"),
+                             ("name", "renamed"), ("projects", ["p"]),
+                             ("refocused", [{"date": "d"}]),
+                             ("previous_names", [{"name": "old"}]),
+                             ("absorbed_by", "successor"),
+                             ("absorbed_by_session", "s")):
+            mprim.set_field(self.vault, "born-1", field, value, root=self.root)
+        data, _ = wslib.read_manifest(self.vault, "born-1", self.root)
+        self.assertEqual(data["focus"], "a new focus")
+        self.assertEqual(data["absorbed_by"], "successor")
+        self.assertEqual(self.token_count(), 0)
+
+    # --- the four gated fields -----------------------------------------
+    def test_each_gated_field_is_refused_without_a_token(self):
+        for field, value in (("maintains", ["[[a-node]]"]),
+                             ("direct_report", {"name": "up", "session": "s"}),
+                             ("collaborate", [{"name": "peer", "session": "p"}]),
+                             ("absorbed", [{"name": "x", "born_session": "y"}])):
+            with self.assertRaises(PermissionError, msg=field) as caught:
+                mprim.set_field(self.vault, "born-1", field, value, root=self.root)
+            self.assertIn("approve.py mint", str(caught.exception))
+            self.assertIn(field, str(caught.exception))
+        data, _ = wslib.read_manifest(self.vault, "born-1", self.root)
+        for field in mprim.GATED_FIELDS:
+            self.assertIn(data[field], ([], None), field)   # nothing landed
+
+    def test_each_gated_field_is_written_with_a_fresh_token(self):
+        for field, value in (("maintains", ["[[a-node]]"]),
+                             ("direct_report", {"name": "up", "session": "s"}),
+                             ("collaborate", [{"name": "peer", "session": "p"}]),
+                             ("absorbed", [{"name": "x", "born_session": "y"}])):
+            self.mint("born-1", field)
+            mprim.set_field(self.vault, "born-1", field, value, root=self.root)
+            data, _ = wslib.read_manifest(self.vault, "born-1", self.root)
+            self.assertEqual(data[field], value, field)
+
+    def test_an_approval_is_one_time(self):
+        self.mint("born-1", "maintains")
+        mprim.set_field(self.vault, "born-1", "maintains", ["one"], root=self.root)
+        self.assertEqual(self.token_count(), 0)   # consumed by the write
+        with self.assertRaises(PermissionError):
+            mprim.set_field(self.vault, "born-1", "maintains", ["two"], root=self.root)
+        data, _ = wslib.read_manifest(self.vault, "born-1", self.root)
+        self.assertEqual(data["maintains"], ["one"])
+
+    def test_a_no_op_assignment_needs_no_approval(self):
+        """Nothing changed, so there is nothing anyone could have reviewed -
+        and a hook re-writing an identical value must not start failing."""
+        mprim.set_field(self.vault, "born-1", "maintains", [], root=self.root)
+        mprim.set_field(self.vault, "born-1", "direct_report", None, root=self.root)
+        self.assertEqual(self.token_count(), 0)
+
+    def test_shape_is_checked_before_the_gate(self):
+        """A value that could never be written is refused for being wrong,
+        and never spends an approval on the way."""
+        self.mint("born-1", "direct_report")
+        with self.assertRaises(ValueError):
+            mprim.set_field(self.vault, "born-1", "direct_report", "bare-string",
+                            root=self.root)
+        self.assertEqual(self.token_count(), 1)   # still unspent
+
+    def test_a_legacy_field_is_refused_before_the_gate(self):
+        with self.assertRaises(ValueError):
+            mprim.set_field(self.vault, "born-1", "parents", ["x"], root=self.root)
+
+    def test_dry_run_checks_the_approval_but_never_spends_it(self):
+        self.mint("born-1", "maintains")
+        mprim.set_field(self.vault, "born-1", "maintains", ["one"],
+                        root=self.root, dry_run=True)
+        self.assertEqual(self.token_count(), 1)   # a preview writes nothing
+        data, _ = wslib.read_manifest(self.vault, "born-1", self.root)
+        self.assertEqual(data["maintains"], [])
+        mprim.set_field(self.vault, "born-1", "maintains", ["one"], root=self.root)
+        self.assertEqual(self.token_count(), 0)
+
+    def test_dry_run_is_refused_without_an_approval(self):
+        with self.assertRaises(PermissionError):
+            mprim.set_field(self.vault, "born-1", "maintains", ["one"],
+                            root=self.root, dry_run=True)
+
+    def test_the_collaborate_primitives_are_gated(self):
+        with self.assertRaises(PermissionError):
+            mprim.collaborate_add(self.vault, "born-1", "peer", "peer-name",
+                                  root=self.root)
+        self.mint("born-1", "collaborate")
+        mprim.collaborate_add(self.vault, "born-1", "peer", "peer-name", root=self.root)
+        with self.assertRaises(PermissionError):
+            mprim.collaborate_remove(self.vault, "born-1", "peer", root=self.root)
+
+    def test_append_absorbed_is_gated(self):
+        with self.assertRaises(PermissionError):
+            mprim.append_absorbed(self.vault, "born-1", "n", "stale-born", "dir",
+                                  root=self.root)
+        self.mint("born-1", "absorbed")
+        mprim.append_absorbed(self.vault, "born-1", "n", "stale-born", "dir",
+                              root=self.root)
+        data, _ = wslib.read_manifest(self.vault, "born-1", self.root)
+        self.assertEqual(len(data["absorbed"]), 1)
+
+    def test_create_is_never_gated(self):
+        """Minting a manifest writes the gated fields EMPTY. There is no
+        change to review, and gating birth would make adopt/fork
+        unreachable - the plugin's whole entry point."""
+        mprim.create_manifest(self.vault, "born-new", "n", "f", root=self.root)
+        data, _ = wslib.read_manifest(self.vault, "born-new", self.root)
+        self.assertEqual(data["collaborate"], [])
+        self.assertEqual(self.token_count(), 0)
+
+    def test_absorb_close_is_never_gated(self):
+        """It writes state + absorbed_by/absorbed_by_session on the STALE
+        manifest - none of the four gated fields."""
+        mprim.create_manifest(self.vault, "stale", "s", "f", root=self.root)
+        data, _note = mprim.absorb_close(self.vault, "stale", "over", "over-born",
+                                         root=self.root)
+        self.assertEqual(data["state"], "absorbed")
+        self.assertEqual(self.token_count(), 0)
+
+    def test_the_off_switch_disarms_the_gate(self):
+        self.disarm_gate()
+        mprim.set_field(self.vault, "born-1", "maintains", ["one"], root=self.root)
+        data, _ = wslib.read_manifest(self.vault, "born-1", self.root)
+        self.assertEqual(data["maintains"], ["one"])
+
+    def test_missing_ballast_refuses_with_a_clear_message(self):
+        os.environ["CLAUDE_PLUGIN_ROOT"] = tempfile.mkdtemp(prefix="ws_no_ballast_")
+        with self.assertRaises(PermissionError) as caught:
+            mprim.set_field(self.vault, "born-1", "maintains", ["one"], root=self.root)
+        self.assertIn("ballast", str(caught.exception))
+        self.assertIn("ballast-gate.disabled", str(caught.exception))
+
+    def test_missing_ballast_still_writes_an_ungated_field(self):
+        os.environ["CLAUDE_PLUGIN_ROOT"] = tempfile.mkdtemp(prefix="ws_no_ballast_")
+        mprim.set_field(self.vault, "born-1", "focus", "still fine", root=self.root)
+        data, _ = wslib.read_manifest(self.vault, "born-1", self.root)
+        self.assertEqual(data["focus"], "still fine")
+
+    def test_a_malformed_scope_does_not_brick_the_gate(self):
+        """approve.py rejects an unloadable --scope with a usage error; the
+        gate retries the bare --file form rather than treating a broken
+        ballast.json as a standing refusal."""
+        self.mint("born-1", "maintains")
+        wslib.atomic_write_lf(self.scope_for("born-1"), "{ not json\n")
+        mprim.set_field(self.vault, "born-1", "maintains", ["one"], root=self.root)
+        data, _ = wslib.read_manifest(self.vault, "born-1", self.root)
+        self.assertEqual(data["maintains"], ["one"])
+
+
 class ManifestCLITests(unittest.TestCase):
     def setUp(self):
         self.vault = make_vault()
@@ -247,6 +546,37 @@ class ManifestCLITests(unittest.TestCase):
         proc = self._run("set", "born-cli2", "direct_report", json.dumps("bare-string"))
         self.assertEqual(proc.returncode, 2)
         self.assertIn("rejected", proc.stderr)
+
+
+class ManifestCLIGateTests(GatedTestCase):
+    """The gate surfaces through the CLI the skills actually call: exit 2
+    with the mint command on stderr, not a traceback."""
+
+    def extra_setup(self):
+        mprim.create_manifest(self.vault, "born-cli", "n", "f", root=self.root)
+
+    def _run(self, *args):
+        env = dict(os.environ)
+        return subprocess.run([sys.executable, os.path.join(SCRIPTS, "manifest.py")]
+                              + list(args), cwd=self.vault, env=env,
+                              capture_output=True, text=True)
+
+    def test_cli_refuses_a_gated_field_without_a_token(self):
+        proc = self._run("set", "born-cli", "maintains", json.dumps(["[[a]]"]))
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("approve.py mint", proc.stderr)
+        self.assertEqual(proc.stdout, "")
+
+    def test_cli_writes_a_gated_field_with_a_token(self):
+        self.mint("born-cli", "maintains")
+        proc = self._run("set", "born-cli", "maintains", json.dumps(["[[a]]"]))
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        data, _ = wslib.read_manifest(self.vault, "born-cli", self.root)
+        self.assertEqual(data["maintains"], ["[[a]]"])
+
+    def test_cli_writes_an_ungated_field_with_no_token(self):
+        proc = self._run("set", "born-cli", "last_touched", json.dumps("2026-09-08T00:00:00Z"))
+        self.assertEqual(proc.returncode, 0, proc.stderr)
 
 
 if __name__ == "__main__":

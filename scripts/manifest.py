@@ -19,6 +19,22 @@ L3) - create_manifest never writes them; set_field refuses to
 2026-09-07: an earlier draft of this docstring claimed one, but neither
 create_manifest nor SCHEMA_FIELDS ever implemented it.)
 
+The approval gate (B2), field-aware: a write that CHANGES `maintains`,
+`direct_report`, `collaborate` or `absorbed` needs a fresh one-time
+approval token (Ballast's `approve.py` convention, resolved through
+`workstream_lib.ballast_script`), which it consumes. Those four reshape
+the fleet - who this workstream answers to, who it works with, what it
+owns, what it swallowed - and each shows up in another workstream's own
+graph, so an unreviewed edit silently rewires the org chart. EVERY other
+field is ungated: `state`, `focus`, `name`, lineage, the immutables, the
+append-only audit arrays, `last_touched`. Gating a hook-written field
+would fail every hook-driven write in the vault, which is a strictly
+worse failure than the one the gate exists to prevent. A no-op assignment
+is never gated (nothing changed for anyone to have reviewed), the shape
+check runs FIRST (an impossible value is refused for being wrong, and
+never spends an approval), and `<state-root>/ballast-gate.disabled`
+disarms the gate exactly as it does for Ballast itself.
+
 The ONE sanctioned cross-manifest write (AB1-AB7): absorb_close sets
 state=absorbed + absorbed_by/absorbed_by_session on the STALE workstream's
 OWN manifest, from the OVERTAKER's session - wrapped in vault-lock
@@ -48,6 +64,43 @@ import workstream_lib as wslib
 
 LEGACY_FIELDS = ("parents", "parent", "parent_session", "rebound")
 
+# --- the field-aware approval gate (B2) ------------------------------------
+# The four fields whose change reshapes the FLEET rather than this one
+# workstream's own description of itself: who it answers to, who it works
+# with, what it owns, and what it swallowed. Each is read at every boot by
+# this session and shows up in another workstream's own graph, so an
+# unreviewed edit silently rewires the org chart. Everything else - state,
+# focus, name, lineage, the immutables, the append-only audit arrays,
+# last_touched - is never gated: those either describe this workstream to
+# itself or are written by machinery on a cadence no person could approve.
+GATED_FIELDS = ("maintains", "direct_report", "collaborate", "absorbed")
+
+# Ballast's master off-switch, honored here for the same reason ballast
+# honors it: a vault deliberately running without the gate (or without
+# ballast at all) must still be able to write its own manifests.
+GATE_DISABLED_FILENAME = "ballast-gate.disabled"
+
+NO_APPROVAL = (
+    "manifest: %r is approval-gated and has no fresh approval.\n"
+    "Show Adam the exact field change - the value now, the value after - "
+    "wait for his explicit yes, then mint the one-time approval:\n"
+    "  approve.py mint --scope %s --file %s --field %s\n"
+    "and run this command again. An approval is one-time, expires in "
+    "minutes, and is consumed by the write it authorizes."
+)
+
+BALLAST_ABSENT = (
+    "manifest: %r is approval-gated, and the `ballast` plugin - which owns "
+    "the approval gate - is not installed anywhere this process can see, so "
+    "no approval can be minted or checked. Install `ballast` from the "
+    "staff-plugins marketplace, or, if this vault deliberately runs without "
+    "it, create %s under the state root to disarm the gate. A gated field is "
+    "never written unapproved."
+)
+
+GATE_OFF_NOTE = ("manifest: the approval gate is OFF (%s exists under %s) - "
+                 "writing %r without an approval.")
+
 # Fields set_field will validate the SHAPE of when present - everything
 # else passes through as opaque JSON (name/focus/projects entries etc. are
 # free-form strings/lists the schema does not otherwise constrain).
@@ -61,6 +114,62 @@ SCHEMA_FIELDS = {
     "refocused": lambda v: isinstance(v, list),
     "previous_names": lambda v: isinstance(v, list),
 }
+
+
+def _run_approve(approve_py, action, target, scope_path, field=None):
+    """One `approve.py <action>` invocation. Returns its exit code, or None
+    when it could not be run at all. `--scope` is passed when the scope
+    file exists (it carries the state root and the TTL); a scope ballast
+    itself refuses to load (exit 2, a usage/scope error) falls back to the
+    bare `--file` form, so a malformed ballast.json degrades the gate to
+    its defaults instead of bricking every manifest write."""
+    argv = [sys.executable, approve_py, action, "--file", target]
+    if field and action == "mint":
+        argv += ["--field", field]
+    try:
+        if scope_path:
+            proc = subprocess.run(argv + ["--scope", scope_path],
+                                  capture_output=True, text=True, timeout=15)
+            if proc.returncode != 2:
+                return proc.returncode
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=15)
+        return proc.returncode
+    except Exception:
+        return None
+
+
+def require_approval(vault, born_session, field, root=None, consume=True):
+    """The gate every gated-field write passes through. Returns silently
+    when the write is authorized; raises PermissionError with the exact
+    next step otherwise.
+
+    `consume=False` (a dry run) CHECKS the approval but does not spend it:
+    a preview writes nothing, so it has nothing to consume, and leaving
+    the token in place is what lets `--dry-run` be a real preview of the
+    write that follows."""
+    manifest_path = wslib.manifest_path_for(vault, born_session, root)
+    ws_dir = os.path.dirname(manifest_path)
+    state_root = os.path.dirname(ws_dir)
+
+    if os.path.isfile(os.path.join(state_root, GATE_DISABLED_FILENAME)):
+        sys.stderr.write(GATE_OFF_NOTE % (GATE_DISABLED_FILENAME, state_root,
+                                          field) + "\n")
+        return
+
+    approve_py = wslib.ballast_script("approve.py")
+    if approve_py is None:
+        raise PermissionError(BALLAST_ABSENT % (field, GATE_DISABLED_FILENAME))
+
+    scope_path = os.path.join(ws_dir, "ballast.json")
+    if not os.path.isfile(scope_path):
+        scope_path = None
+
+    if _run_approve(approve_py, "check", manifest_path, scope_path) != 0:
+        raise PermissionError(NO_APPROVAL % (field, scope_path or
+                                             "<the scope's ballast.json>",
+                                             manifest_path, field))
+    if consume:
+        _run_approve(approve_py, "consume", manifest_path, scope_path)
 
 
 def create_manifest(vault, born_session, name, focus, spawned_from=None,
@@ -114,6 +223,12 @@ def set_field(vault, born_session, field, value, root=None, dry_run=False):
     validator = SCHEMA_FIELDS.get(field)
     if validator is not None and not validator(value):
         raise ValueError("field %r rejected value %r - fails shape check" % (field, value))
+    # Shape first, then the gate: a value that could never be written is
+    # refused for the reason it is actually wrong, and never spends an
+    # approval. A no-op assignment needs no approval either - there is no
+    # change for anyone to have reviewed.
+    if field in GATED_FIELDS and manifest.get(field) != value:
+        require_approval(vault, born_session, field, root, consume=not dry_run)
     manifest[field] = value
     wslib.atomic_write_json(wslib.manifest_path_for(vault, born_session, root), manifest, dry_run=dry_run)
     return manifest
@@ -130,7 +245,8 @@ def collaborate_add(vault, born_session, peer_session, peer_name, scope=None, ro
     if not isinstance(collab, list):
         collab = []
     if any(isinstance(e, dict) and e.get("session") == peer_session for e in collab):
-        return manifest   # already present - additive, idempotent
+        return manifest   # already present - additive, idempotent, nothing to approve
+    require_approval(vault, born_session, "collaborate", root, consume=not dry_run)
     entry = {"name": peer_name, "session": peer_session}
     if isinstance(scope, str) and scope.strip():
         entry["scope"] = scope.strip()
@@ -147,8 +263,11 @@ def collaborate_remove(vault, born_session, peer_session, root=None, dry_run=Fal
     collab = manifest.get("collaborate")
     if not isinstance(collab, list):
         collab = []
-    manifest["collaborate"] = [e for e in collab
-                               if not (isinstance(e, dict) and e.get("session") == peer_session)]
+    remaining = [e for e in collab
+                 if not (isinstance(e, dict) and e.get("session") == peer_session)]
+    if remaining != collab:
+        require_approval(vault, born_session, "collaborate", root, consume=not dry_run)
+    manifest["collaborate"] = remaining
     wslib.atomic_write_json(wslib.manifest_path_for(vault, born_session, root), manifest, dry_run=dry_run)
     return manifest
 
@@ -167,7 +286,8 @@ def append_absorbed(vault, overtaker_born_session, name, absorbed_born_session,
     if not isinstance(absorbed, list):
         absorbed = []
     if any(isinstance(e, dict) and e.get("born_session") == absorbed_born_session for e in absorbed):
-        return manifest
+        return manifest   # additive, idempotent - nothing to approve
+    require_approval(vault, overtaker_born_session, "absorbed", root, consume=not dry_run)
     entry = {"name": name, "born_session": absorbed_born_session, "dir": dir_path}
     if transcript_path:
         entry["transcript"] = transcript_path
@@ -384,7 +504,7 @@ def main(argv):
             print("manifest: %sabsorb-close %s -> absorbed_by %s" % ("DRY-RUN: would " if args.dry_run else "",
                                                                       args.stale_born_session, args.by_name))
             return 0
-    except (FileNotFoundError, FileExistsError, ValueError) as e:
+    except (FileNotFoundError, FileExistsError, ValueError, PermissionError) as e:
         sys.stderr.write("manifest: %s\n" % e)
         return 2
 

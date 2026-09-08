@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Unit tests for scripts/views.py - the fleet-index + graph regenerator
 (V2, V4)."""
+import contextlib
+import io
 import os
 import shutil
 import subprocess
@@ -19,6 +21,22 @@ def make_vault():
     d = tempfile.mkdtemp(prefix="ws_views_test_")
     os.makedirs(os.path.join(d, "staff"), exist_ok=True)
     return d
+
+
+def gated_fixture(vault, fn, *args, **kwargs):
+    """Run one of manifest.py's approval-gated primitives while BUILDING A
+    FIXTURE. The gate (B2) has no person to ask inside a test, so the
+    state root carries ballast's own documented off-switch, and that
+    switch's deliberately loud stderr note is swallowed here rather than
+    printed into the harness's output. The gate itself is tested in
+    tests/test_manifest.py; these tests are about views.py's output."""
+    state_root = wslib.state_root(vault)
+    os.makedirs(state_root, exist_ok=True)
+    switch = os.path.join(state_root, "ballast-gate.disabled")
+    if not os.path.isfile(switch):
+        open(switch, "w").close()
+    with contextlib.redirect_stderr(io.StringIO()):
+        return fn(*args, **kwargs)
 
 
 class RegenerateTests(unittest.TestCase):
@@ -42,7 +60,8 @@ class RegenerateTests(unittest.TestCase):
         mprim.create_manifest(self.vault, "root", "root-ws", "root focus")
         mprim.create_manifest(self.vault, "child", "child-ws", "child focus",
                               spawned_from="root-ws", spawned_from_session="root")
-        mprim.set_field(self.vault, "child", "direct_report", {"name": "root-ws", "session": "root"})
+        gated_fixture(self.vault, mprim.set_field, self.vault, "child",
+                      "direct_report", {"name": "root-ws", "session": "root"})
         summary = views.regenerate(self.vault)
         self.assertEqual(summary["manifests"], 2)
         with open(summary["index_path"]) as f:

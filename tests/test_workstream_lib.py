@@ -293,6 +293,85 @@ class DependencyDegradeTests(unittest.TestCase):
         finally:
             shutil.rmtree(home, ignore_errors=True)
 
+    # ballast_script() - what manifest.py's approval gate resolves in order
+    # to RUN ballast's approve.py. Same two path-based steps
+    # ballast_available() uses; deliberately no registry step, since a
+    # registry key is a belief with nothing to execute at the end of it.
+    def test_ballast_script_none_when_ballast_absent(self):
+        os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
+        os.environ["HOME"] = tempfile.mkdtemp(prefix="ws_home_")
+        os.environ.pop("USERPROFILE", None)
+        self.assertIsNone(wslib.ballast_script("approve.py"))
+
+    def test_ballast_script_found_as_a_sibling_plugin(self):
+        plugins_root = tempfile.mkdtemp(prefix="ws_plugins_root_")
+        try:
+            own = os.path.join(plugins_root, "workstream")
+            os.makedirs(own)
+            scripts = os.path.join(plugins_root, "ballast", "scripts")
+            os.makedirs(scripts)
+            approve = os.path.join(scripts, "approve.py")
+            with open(approve, "w") as f:
+                f.write("# stub\n")
+            os.environ["CLAUDE_PLUGIN_ROOT"] = own
+            self.assertEqual(wslib.ballast_script("approve.py"), approve)
+            # a script ballast does not ship is still None, not a guess
+            self.assertIsNone(wslib.ballast_script("nonesuch.py"))
+        finally:
+            shutil.rmtree(plugins_root, ignore_errors=True)
+
+    def test_ballast_script_found_in_the_versioned_cache(self):
+        home = tempfile.mkdtemp(prefix="ws_home_")
+        try:
+            os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
+            os.environ["HOME"] = home
+            os.environ.pop("USERPROFILE", None)
+            scripts = os.path.join(home, ".claude", "plugins", "cache",
+                                   "staff-plugins", "ballast", "0.1.2", "scripts")
+            os.makedirs(scripts)
+            approve = os.path.join(scripts, "approve.py")
+            with open(approve, "w") as f:
+                f.write("# stub\n")
+            self.assertEqual(wslib.ballast_script("approve.py"), approve)
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
+    def test_ballast_script_prefers_the_highest_installed_version(self):
+        home = tempfile.mkdtemp(prefix="ws_home_")
+        try:
+            os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
+            os.environ["HOME"] = home
+            os.environ.pop("USERPROFILE", None)
+            base = os.path.join(home, ".claude", "plugins", "cache",
+                                "staff-plugins", "ballast")
+            for version in ("0.1.1", "0.1.10", "0.1.2"):
+                scripts = os.path.join(base, version, "scripts")
+                os.makedirs(scripts)
+                with open(os.path.join(scripts, "approve.py"), "w") as f:
+                    f.write("# stub\n")
+            self.assertIn(os.path.join("0.1.10", "scripts"),
+                          wslib.ballast_script("approve.py"))
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
+    def test_a_registry_key_alone_yields_no_script_path(self):
+        """ballast_available() accepts installed_plugins.json as a last,
+        weakest signal; ballast_script() must not - there is nothing to
+        execute at the end of a belief."""
+        home = tempfile.mkdtemp(prefix="ws_home_")
+        try:
+            os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
+            os.environ["HOME"] = home
+            os.environ.pop("USERPROFILE", None)
+            plugins_dir = os.path.join(home, ".claude", "plugins")
+            os.makedirs(plugins_dir)
+            with open(os.path.join(plugins_dir, "installed_plugins.json"), "w") as f:
+                json.dump({"plugins": {"ballast@staff-plugins": []}}, f)
+            self.assertTrue(wslib.ballast_available())
+            self.assertIsNone(wslib.ballast_script("approve.py"))
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
     def test_adopt_precheck_refuses_without_ballast(self):
         os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
         os.environ["HOME"] = tempfile.mkdtemp(prefix="ws_home_")
