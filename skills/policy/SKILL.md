@@ -1,72 +1,80 @@
 ---
 name: policy
-description: Add, edit, or remove a workstream's standing policy in policy.md's Policies section (rules only — Maintains lives in the manifest now, not here). Edits ONLY this session's own bound workstream's policy.md (single-writer); bare invocation shows it read-only. Trigger on "add a policy", "this workstream should…", "workstream policy", "/workstream:policy". Do NOT use for a maintains/ownership declaration (workstream:manifest — maintains[] lives on the manifest), to adopt (workstream:adopt), rename (workstream:refocus), or close a workstream.
+description: Edit this workstream's standing rules in policy.md, through Ballast's approval gate - show Adam the exact text, wait for his yes, mint the approval, then let the primitive write. Trigger on "add a policy", "change the standing rules", "this workstream should always...". Do NOT use for the shared rules every workstream reads (that is global-policy), for a glossary entry, or for a playbook recipe.
 ---
+<!-- ballast-template: policy v1 -->
 
-# Workstream policy
+# policy
 
-Shares the shared model: `${CLAUDE_PLUGIN_ROOT}/docs/workstream-model.md`.
+Edits `policy.md`: the standing rules THIS scope's sessions read at every
+boot. A rule here changes how every later session behaves, so it is
+approval-gated — a direct Write or Edit to the file is refused by
+Ballast's PreToolUse gate (`docs/approval-gate.md`).
 
-Maintain a workstream's durable rules layer — `<ws_dir>/policy.md`,
-one of Ballast's continuity files beside `hot.md` (recent memory) and
-`log.md` (append-only trail). Rules only: `## Maintains` is **retired
-from this file** (I6) — a duty list is data, so it moved to the
-manifest's `maintains[]` field, written via `workstream:manifest`
-("maintains[] — add/remove"), never here. Run this **in the session**
-whose policy you're changing. Never touches a vault project/spine node.
+Ballast never registers this skill; it ships this template and a consumer
+vendors it. Everything below the consumer-extras marker at the bottom is
+the consumer's own and survives a re-sync.
 
-## `/workstream:policy [natural-language change]`
+## Steps
 
-1. **Target = THIS session's bound workstream, always.** Resolve
-   exactly as `workstream:manifest` does: read the `<!-- workstream-session-id: ... -->` line, `python3 scripts/sidecar.py resolve <session_id>` → `{born_session, ws_dir}`. Exit 1 → refuse,
-   point to `/workstream:adopt`. No cross-session target argument.
+1. **Resolve the scope.** Find this session's `ballast.json`. Read the
+   current `policy.md` in full before proposing any change — you are
+   replacing the whole file, not appending to it.
+2. **Draft the WHOLE file.** `policy.py set` replaces `policy.md` entirely:
+   the cadence for standing text is a periodic full re-statement, not a
+   stream of small edits. Apply the per-line test to every line you keep —
+   "would removing this line cause a mistake?" — and drop the ones that
+   fail it. This file is injected at every boot; length costs reasoning.
+3. **Show Adam the EXACT text.** Print the complete new `policy.md`,
+   verbatim, in the chat. Name what changed and what was dropped. Do not
+   summarise it — he is approving the text, not a description of it.
+4. **Wait for an explicit yes.** Silence, "sounds good", or a reply to a
+   different question is not a yes. If he asks for changes, go back to
+   step 3 with the revised full text.
+5. **Mint the approval, then write.** Write the approved text to a temp
+   file, then:
 
-2. **Single-writer, extended to `policy.md`.** Edits ONLY this
-   session's own workstream's `policy.md`. To change another
-   workstream's policy: notify that session (`workstream:notify`) and
-   let it reconcile there — never a direct edit.
-
-3. **Bare invocation is read-only.** Read and show `<ws_dir>/policy.md`
-   verbatim, or report none exists yet. Stop — no write, no creation.
-
-4. **For a real change, create `policy.md` first if absent** — always
-   under the `ws_dir` step 1 resolved:
-   ```markdown
-   # <workstream-name> — policy
-
-   ## Policies
    ```
-   (No `## Maintains` header — target schema drops it from this file.
-   A pre-existing `policy.md` from before this cutover may still carry a
-   populated `## Maintains` section: leave it as-is on a `## Policies`-only
-   edit, but if the ask concerns a maintains item, redirect it to
-   `workstream:manifest` rather than editing the stale section here —
-   don't grow a second copy of the duty list in two places.)
+   approve.py mint --scope <path to ballast.json> --file <path to policy.md>
+   policy.py set --scope <path to ballast.json> --from <path to temp file> --reason "<why>"
+   ```
 
-5. **Parse the change and apply it under `## Policies`** — a strategy,
-   behavior, or standing directive ("always do X", "prefer Y over Z",
-   "never do W without asking"). Add, edit, or remove a line: a bare
-   new statement appends; "stop doing X" removes the matching line; a
-   rephrase of an existing line modifies it in place.
+   The approval is one-time and expires in ten minutes; the primitive
+   consumes it and appends one line to `log.md`.
+6. **Confirm.** Report the new byte size against `policy_cap_bytes` and
+   the log line that was written.
 
-   If the ask reads as an ownership/maintenance statement instead
-   ("maintain X", "I own Y", a bare wikilink/absolute path with no
-   other framing) — that's `maintains[]`, not a policy: redirect to
-   `workstream:manifest`, don't write it here.
+## Not this skill's job
 
-6. **Write via Write/Edit — never a Bash append that doesn't name the
-   `born_session` uuid dir directly** (a shell-variable-indirected
-   append gets misread by the log/staleness machinery — same reasoning
-   as the manifest primitive's own write rule).
+- The shared rules EVERY workstream reads: that is `global-policy.md`, a
+  different file with a different scope and its own verb.
+- A term definition (`glossary.md`) or a situational recipe
+  (`playbook.md`) — each has its own gated verb and its own primitive.
+- Writing `policy.md` by hand: the gate refuses it, and that is the point.
 
-7. **Confirm** in one line: what was added, removed, or changed.
+<!-- consumer-extras -->
+## Which scope (workstream's own resolution)
 
-## Discipline
+The scope is **this session's own bound workstream**, always. Read the
+`<!-- workstream-session-id: ... -->` line `boot.py` injected this
+session, then resolve it: `python3 scripts/sidecar.py resolve <session_id>`
+prints `{born_session, ws_dir}` and exits 0. Exit 1 means this session is
+not bound - refuse and point at `/workstream:adopt`. The scope file is
+`<ws_dir>/ballast.json`; `policy.md` sits beside it. There is no
+cross-session target argument.
 
-`policy.md` is injected whole (≤7 KB), approval-gated, into this
-workstream's bound sessions on the same cadence as `hot.md` (Ballast's
-job, not this skill's). A session writes only its OWN workstream's
-`policy.md` (single-writer); it never edits another workstream's
-directly, only via `notify`. Rules only — no duty list; `maintains[]`
-lives exclusively on the manifest (I6), written only through
-`workstream:manifest`. Never touches a vault project/spine node.
+*(interpreter-shim caveat: neither `python3` nor `python` resolves on
+every host - try `python3`, then `python`, then `py -3`, then `py`.)*
+
+**Single-writer.** This verb edits only THIS session's own workstream's
+`policy.md`. To change another workstream's, notify that session
+(`workstream:notify`) and let it reconcile there - never a direct edit,
+and never a vault project/spine node.
+
+**No `## Maintains` section.** A duty list is data, so it lives on the
+manifest's `maintains[]` field, written only through
+`workstream:manifest` (which gates it). A `policy.md` written before
+that cutover may still carry a populated `## Maintains`: leave it as it
+stands on a rules-only edit, and redirect any maintains ask to
+`workstream:manifest` rather than growing a second copy of the duty list
+in two places.
