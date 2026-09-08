@@ -260,6 +260,39 @@ class DependencyDegradeTests(unittest.TestCase):
         finally:
             shutil.rmtree(plugins_root, ignore_errors=True)
 
+    # 2026-09-07 fork incident coverage: CLAUDE_PLUGIN_ROOT unset (a shell-
+    # run check, not a hook) must still find ballast via the marketplace-
+    # nested installed-cache shape (cache/<marketplace>/ballast/<semver>/
+    # scripts/ballast.py), which the plain HOME fallback alone misses.
+    def test_ballast_available_var_unset_cache_marketplace_scan_hit(self):
+        home = tempfile.mkdtemp(prefix="ws_home_")
+        try:
+            os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
+            os.environ["HOME"] = home
+            os.environ.pop("USERPROFILE", None)
+            ballast_scripts = os.path.join(home, ".claude", "plugins", "cache",
+                                          "staff-plugins", "ballast", "0.1.0", "scripts")
+            os.makedirs(ballast_scripts)
+            with open(os.path.join(ballast_scripts, "ballast.py"), "w") as f:
+                f.write("# stub\n")
+            self.assertTrue(wslib.ballast_available())
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
+    def test_ballast_available_var_unset_registry_only_hit(self):
+        home = tempfile.mkdtemp(prefix="ws_home_")
+        try:
+            os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
+            os.environ["HOME"] = home
+            os.environ.pop("USERPROFILE", None)
+            plugins_dir = os.path.join(home, ".claude", "plugins")
+            os.makedirs(plugins_dir)
+            with open(os.path.join(plugins_dir, "installed_plugins.json"), "w") as f:
+                json.dump({"version": 2, "plugins": {"ballast@staff-plugins": []}}, f)
+            self.assertTrue(wslib.ballast_available())
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
     def test_adopt_precheck_refuses_without_ballast(self):
         os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
         os.environ["HOME"] = tempfile.mkdtemp(prefix="ws_home_")

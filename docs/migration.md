@@ -107,3 +107,45 @@ soft dependency with `workstream_lib.grill_available()` as the detector.
 ## State root moved 2026-09-07
 
 The principal moved the tree: `staff/cos/workstreams` -> `.vault-meta/workstreams` (manifests + hot/log/policy caches + index, tracked in git) and `staff/cos/workstream-sessions` -> `.vault-meta/workstream-sessions` (sidecars, gitignored). `config.json` `state_root` now defaults to `.vault-meta/workstreams`; the sidecar dir stays the sibling `workstream-sessions` of the root's parent. An empty `staff/cos/workstreams/` shell with a README tombstone may linger until the process holding it lets go.
+
+## 0.1.3 (2026-09-07) - four fixes
+
+- **`ballast_available()` found ballast even without `CLAUDE_PLUGIN_ROOT`.**
+  The first post-restart `/workstream:fork` had its `adopt_precheck()`
+  refuse to mint even though ballast 0.1.0 was installed and its hooks
+  were running - the check ran from a skill's shell, not a hook, so
+  `CLAUDE_PLUGIN_ROOT` was unset and the old single-path HOME fallback
+  looked for `cache/ballast/...` when the real installed-cache shape
+  nests a plugin under its marketplace name (`cache/<marketplace>/
+  ballast/<semver>/scripts/ballast.py`). Fixed with a three-step fallback
+  in `scripts/workstream_lib.py`: (1) the existing CLAUDE_PLUGIN_ROOT
+  sibling lookup, unchanged; (2) a marketplace-glob scan of
+  `~/.claude/plugins/cache/*/ballast/*/scripts/ballast.py`; (3)
+  `~/.claude/plugins/installed_plugins.json` carrying a `ballast@...`
+  key, as a last, weakest signal. True if any step succeeds.
+- **`boot.py`'s SessionStart was fully silent for an unbound session.**
+  Past its own session-id echo line, a session with no sidecar got
+  nothing - no NOTE, no hint that `/workstream:connect` or
+  `/workstream:adopt` existed. This is the same "if-absent-silent"
+  discipline ported from `cos-boot.py`, but it violates this plugin's own
+  I5 ("never silent"). Now emits exactly one short NOTE (under 200
+  bytes) naming both verbs; the ~1 KB identity block and the
+  session-id echo line are unaffected.
+- **`boot.py`'s identity block also silently dropped a MALFORMED
+  `direct_report`** - the same silent-failure class as the fix above, one
+  level in: a bound session whose `direct_report` is a bare string (not
+  `{name,session}|null`) rendered "reports to: nobody - a root" with no
+  hint anything was wrong, since `normalize_direct_report()` just returns
+  `None` for a non-dict value. `render_identity_block` now runs the
+  manifest through the shared `workstream_lib.find_problems()` checker
+  (the same one `views.py`'s `regenerate()` calls, V4) and appends one
+  short NOTE line naming the schema problem when it finds one -
+  restricted to the shape-only problem kinds (invalid state, malformed
+  direct_report/collaborate/absorbed, legacy fields) so it never
+  false-positives on an ordinary cross-reference to a sibling workstream.
+- **`manifest.py`'s module docstring claimed a phantom top-level `scope`
+  field** ("scope (NEW - the ballast scope declaration, X10)") that
+  neither `create_manifest()` nor `SCHEMA_FIELDS` ever implemented - the
+  ratified model has no such field; `scope` only exists as a per-peer key
+  inside `collaborate[]`. Doc-only fix; `docs/workstream-model.md` carried
+  the same phantom "gains ...scope" wording and is corrected too.

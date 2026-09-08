@@ -127,7 +127,7 @@ or on Windows:
 py -3 tests\test_workstream_lib.py
 ```
 
-113 tests total, including the crafted-stdin cases for `boot.py`/
+115 tests total, including the crafted-stdin cases for `boot.py`/
 `remind.py`/`precompact.py` (28 across the three - see each file's own
 module docstring for the enumerated cases), the manifest single-writer +
 absorb cross-write (including every mutating primitive's `--dry-run`/

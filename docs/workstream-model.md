@@ -11,9 +11,13 @@
      spawn and rebind are RETIRED (L2, L3 - the sidecar primitive's
      self-heal covers rebind's one real case), continuity (hot/log/policy/
      index) is Ballast's scope, not this plugin's own hooks, and the
-     manifest schema gains absorbed[]/maintains[]/scope while dropping
-     parents[]/parent/parent_session/rebound[] (I4). Skills themselves are
-     a separate build (see README.md) - this doc is their shared contract. -->
+     manifest schema gains absorbed[]/maintains[] while dropping
+     parents[]/parent/parent_session/rebound[] (I4) - there is no
+     top-level manifest `scope` field (B2, 2026-09-07): the only `scope`
+     is the freeform per-peer note inside each collaborate[] entry, plus
+     the unrelated ballast.json scope declaration mentioned elsewhere in
+     this doc. Skills themselves are a separate build (see README.md) -
+     this doc is their shared contract. -->
 
 # The workstream model
 

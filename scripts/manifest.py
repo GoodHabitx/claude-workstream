@@ -11,10 +11,13 @@ born_session, spawned_from, spawned_from_session, direct_report (single
 {name,session}|null - never a list), collaborate[] ({name,session,scope}),
 refocused[], previous_names[], projects[] (informational, I7), absorbed[]
 (NEW - {name, born_session, dir, transcript}, AB3), maintains[] (NEW -
-vault wikilinks or absolute paths, I6), scope (NEW - the ballast scope
-declaration, X10). DROPPED going forward: parents[]/parent/parent_session
-(multi-parent retired), rebound[] (rebind retired, L3) - create_manifest
-never writes them; set_field refuses to (re)introduce them.
+vault wikilinks or absolute paths, I6). DROPPED going forward: parents[]/
+parent/parent_session (multi-parent retired), rebound[] (rebind retired,
+L3) - create_manifest never writes them; set_field refuses to
+(re)introduce them. (There is no top-level `scope` field - a per-peer
+`scope` freeform note lives only inside each collaborate[] entry, B2
+2026-09-07: an earlier draft of this docstring claimed one, but neither
+create_manifest nor SCHEMA_FIELDS ever implemented it.)
 
 The ONE sanctioned cross-manifest write (AB1-AB7): absorb_close sets
 state=absorbed + absorbed_by/absorbed_by_session on the STALE workstream's

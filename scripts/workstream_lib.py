@@ -451,8 +451,84 @@ def _plugin_present(name, marker_rel):
     return False
 
 
+REGISTRY_CAP = 1024 * 256   # byte cap on installed_plugins.json we will read
+
+
+def _ballast_marketplace_glob_hit(home):
+    """Step 2 of ballast_available()'s fallback chain: scan every
+    marketplace dir under `<home>/.claude/plugins/cache/*/ballast/*/
+    scripts/ballast.py` (any marketplace, any version - first hit wins).
+
+    _plugin_roots()'s own HOME fallback (used when CLAUDE_PLUGIN_ROOT is
+    unset) checks `<home>/.claude/plugins/cache/ballast/...` directly,
+    which is right for a flat dev clone but misses the real installed-
+    cache shape: the harness nests each plugin one level under its
+    marketplace name, e.g. `cache/staff-plugins/ballast/0.1.0/scripts/
+    ballast.py` (confirmed 2026-09-07 against the live cache). A shell
+    invocation - a skill running outside a hook - has no sibling to walk
+    from and never sets CLAUDE_PLUGIN_ROOT, so step 1 alone found
+    nothing there even with ballast genuinely installed and running."""
+    cache = os.path.join(home, ".claude", "plugins", "cache")
+    try:
+        marketplaces = os.listdir(cache)
+    except OSError:
+        return False
+    for mkt in marketplaces:
+        ballast_dir = os.path.join(cache, mkt, "ballast")
+        if os.path.isfile(os.path.join(ballast_dir, "scripts", "ballast.py")):
+            return True
+        for versioned in _semver_dirs(ballast_dir):
+            if os.path.isfile(os.path.join(versioned, "scripts", "ballast.py")):
+                return True
+    return False
+
+
+def _ballast_in_installed_registry(home):
+    """Step 3 (optional, weakest signal): `installed_plugins.json` carries
+    a `plugins` map keyed `<name>@<marketplace>` - a `ballast@...` key
+    means the harness itself believes ballast is installed, independent
+    of this process being able to see its on-disk shape."""
+    registry = os.path.join(home, ".claude", "plugins", "installed_plugins.json")
+    data, _err = read_json(registry, cap=REGISTRY_CAP)
+    if not isinstance(data, dict):
+        return False
+    plugins = data.get("plugins")
+    if not isinstance(plugins, dict):
+        plugins = data   # tolerate a flat {key: [...]} shape too
+    return any(isinstance(k, str) and k.startswith("ballast@") for k in plugins)
+
+
 def ballast_available():
-    return _plugin_present("ballast", os.path.join("scripts", "ballast.py"))
+    """True if the `ballast` plugin is installed and visible to THIS
+    process, checked by a three-step fallback chain (2026-09-07 fork
+    incident: the first post-restart `/workstream:fork` had its
+    `adopt_precheck()` refuse the mint even though ballast 0.1.0 was
+    installed and its hooks were running - the precheck ran from a
+    skill's shell rather than a hook, so `CLAUDE_PLUGIN_ROOT` was unset
+    and the old single-path check saw nothing):
+
+      1. `_plugin_present()`'s existing CLAUDE_PLUGIN_ROOT-sibling lookup
+         - unchanged, and already correct whenever a hook set the env var.
+      2. `_ballast_marketplace_glob_hit()` - scan every marketplace dir
+         under `~/.claude/plugins/cache/*/ballast/*/scripts/ballast.py`,
+         which step 1's own HOME fallback does not reach (see its
+         docstring). Tried whether step 1 failed OR the env var was
+         simply unset, since a shell-run check has no env var to begin
+         with.
+      3. `_ballast_in_installed_registry()` - `installed_plugins.json`
+         carrying a `ballast@...` key, as a last, weakest signal.
+
+    True if ANY step succeeds; no env var currently overrides this
+    result (none exists in this plugin yet - honor one here if that
+    changes)."""
+    if _plugin_present("ballast", os.path.join("scripts", "ballast.py")):
+        return True
+    home = os.environ.get("USERPROFILE") or os.environ.get("HOME")
+    if not home:
+        return False
+    if _ballast_marketplace_glob_hit(home):
+        return True
+    return _ballast_in_installed_registry(home)
 
 
 def vault_lock_available(vault):

@@ -2,12 +2,12 @@
   "name": "workstream",
   "displayName": "Workstream",
   "description": "Gives a Claude Code session a durable name, a job, and relationships that survive every restart and compaction: a manifest + self-healing sidecar anchor identity on born_session; adopt/fork/refocus/close/absorb lifecycle; notify/list/graph/connect views. Its own SessionStart emits the identity block directly from the manifest under the harness inline cap; UserPromptSubmit re-shows it every 25 turns. Continuity (hot/log/policy/index) is Ballast's, not this plugin's. Do NOT use for task ranking, calendar planning, or vault content decisions.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "author": {
     "name": "Adam Weiner",
     "url": "https://github.com/GoodHabitx"
   },
-  "repository": "https://github.com/GoodHabitx/workstream",
+  "repository": "https://github.com/GoodHabitx/claude-workstream",
   "keywords": [
     "identity",
     "lifecycle",

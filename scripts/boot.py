@@ -13,13 +13,23 @@ long-context session's own instructions decay across it). Emits, in order:
      (X3 - deterministic, never judgment-refreshed) - name, focus, state,
      direct_report, collaborate[], maintains[], absorbed[] pointers, and
      the file paths a session can read on demand (hub's context table).
+     Appends one more short NOTE line when the manifest's OWN shape fails
+     validation (e.g. a bare-string direct_report instead of {name,
+     session}|null) - I5 again: a corrupt field must not silently render
+     as a plausible-looking wrong line (B1, 2026-09-07).
   3. A one-line degrade NOTE when vault-lock is not materialized in this
      vault (soft dependency - E1-E7 Dependencies page: "no vault-lock ->
      boot warns: writes are unguarded across sessions").
 
-Unbound sessions (the common case for most sessions) get ONLY the echo
-line - no NOTE, no identity block; same if-absent-silent discipline
-cos-boot.py used for "no sidecar for this session at all".
+Unbound sessions (the common case for most sessions) get the echo line
+plus ONE short NOTE (under 200 bytes) naming /workstream:connect (a
+pre-restart ws- session) or /workstream:adopt (a new one) - never the ~1
+KB identity block, but never fully silent either. This replaces the
+prior if-absent-silent discipline ported from cos-boot.py: I5 ("never
+silent" - docs/workstream-model.md) means a missing binding must be
+announced, not left for the session to infer from an absence (2026-09-07
+truth-up: a shell-run precheck reading unbound with no explanation is the
+same class of defect this fixes here for boot's own SessionStart line).
 
 Also resets this session's remind turn-counter to 0 on every fire (X4
 dedup: "the boot command clears the turn counter on every fire; remind
@@ -38,6 +48,25 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import workstream_lib as wslib
 
 IDENTITY_CAP = 1400   # bytes - target ~1 KB (hub context table); loud truncation past it
+
+# Schema-shape problem kinds from workstream_lib.find_problems() that are
+# meaningful when checked against THIS session's manifest alone (Inv-1/
+# Inv-5 - no cross-manifest lookup involved). The dangling/stale-reference
+# kinds (Inv-2/3/4) and "duplicate name" need the FULL vault scan to mean
+# anything; checked against a single-entry dict they would false-positive
+# on every ordinary reference to a sibling workstream (born_session would
+# never resolve against a dict holding only itself) - the same class of
+# regression I5 forbids in the opposite direction. Those are already
+# surfaced inline above via the (unresolved)/[closed]/[absorbed] badges,
+# so B1's schema-shape NOTE stays scoped to this manifest's own shape.
+_ISOLATED_PROBLEM_KINDS = frozenset((
+    "invalid state",
+    "malformed direct_report",
+    "malformed collaborate",
+    "malformed absorbed",
+    "malformed absorbed entry",
+    "legacy field on active manifest",
+))
 
 
 def read_stdin_payload():
@@ -61,6 +90,27 @@ def _rel(vault, path):
         return os.path.relpath(path, vault).replace(os.sep, "/")
     except ValueError:
         return path
+
+
+def _schema_problem_note(born_session, manifest):
+    """B1, I5 ('never silent' - docs/workstream-model.md): a manifest
+    whose OWN field fails shape validation (e.g. direct_report is a bare
+    string instead of {name,session}|null) must say so, not silently
+    degrade into a plausible-looking wrong line - the same silent-failure
+    class A2 fixed for an unbound session. Runs the SAME shared checker
+    views.py's regenerate() calls (workstream_lib.find_problems - V4:
+    "one manifest-scan function inside the plugin") against just this
+    manifest, filtered to the shape-only kinds (see
+    _ISOLATED_PROBLEM_KINDS above). Returns None when clean."""
+    problems = wslib.find_problems({born_session: manifest})
+    own = [(k, d) for k, d in problems if k in _ISOLATED_PROBLEM_KINDS]
+    if not own:
+        return None
+    prefix = born_session + ": "
+    details = [d[len(prefix):] if d.startswith(prefix) else d for _k, d in own]
+    return ("NOTE (workstream boot): this workstream's manifest has a schema "
+            "problem: %s - run /workstream:connect. Reporting line may be "
+            "wrong." % "; ".join(details))
 
 
 def render_identity_block(vault, born_session, ws_dir, root=None):
@@ -128,6 +178,10 @@ def render_identity_block(vault, born_session, ws_dir, root=None):
     lines.append("- change these ONLY via the manifest/policy primitive from "
                 "THIS session's own workstream (single-writer, I3).")
 
+    note = _schema_problem_note(born_session, manifest)
+    if note:
+        lines.append(note)
+
     block = "\n".join(lines)
     raw = block.encode("utf-8")
     if len(raw) > IDENTITY_CAP:
@@ -170,8 +224,14 @@ def main():
             if not wslib.vault_lock_available(vault):
                 out.append("NOTE (workstream boot): vault-lock is not installed/materialized "
                           "in this vault - writes are unguarded across sessions this session.")
-        # else: unbound - the common case, stay silent (matches cos-boot's
-        # "no sidecar for this session -> silent" discipline).
+        else:
+            # Unbound: I5 "never silent" - a session with no sidecar must
+            # be told so in one short line, not left to infer it from the
+            # absent identity block (2026-09-07 truth-up).
+            out.append("NOTE (workstream boot): no sidecar for %s - not bound "
+                      "to a workstream. A pre-restart ws- session: run "
+                      "/workstream:connect. A new session: /workstream:adopt."
+                      % session_id[:8])
 
     sys.stdout.write("\n\n".join(out) + "\n")
     return 0
