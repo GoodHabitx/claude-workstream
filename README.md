@@ -6,10 +6,42 @@ survive every restart and compaction. Extracted from `cos` 0.20.0's fused
 persona-less plugin (04-workstreams-plugin.md and its component pages,
 `_decisions.md` I1-I7/L1-L8/R1-R6/X1-X10/E1-E7).
 
-This repo ships the **core**: identity primitives, lifecycle-writing
+This repo ships the **core** - identity primitives, lifecycle-writing
 primitives, the boot/remind/precompact hooks, the fleet-views generator,
-and the Ballast wiring. The 12 verb skills (`adopt · fork · refocus · close · absorb · notify · list · graph · connect · manifest · policy · sidecar`) are a separate build against the contract this repo exposes -
-see `docs/dependencies.md` and each script's own module docstring.
+and the Ballast wiring - plus **16 verb skills**: the twelve built against
+that core (`adopt · fork · refocus · close · absorb · notify · list ·
+graph · connect · manifest · policy · sidecar`), the read-only `status`,
+and three vendored from Ballast's own templates (`global-policy ·
+glossary · playbook`; `policy` is vendored too). See
+`docs/dependencies.md` and each script's own module docstring.
+
+## 0.1.4 changes
+
+Against Ballast 0.1.2 as shipped:
+
+- **SessionStart splits per part.** `hot`, `policy`, `glossary`,
+  `playbook` each ride their own hook command, because the harness caps
+  each command's stdout independently at 9,687 B; four parts on one
+  command would share one envelope and defeat it. A fifth command
+  delivers the **global scope** (`--part policy --scope-kind global`),
+  silent until an operator seeds `<state_root>/_global/`.
+- **A PreToolUse entry** on `Write|Edit|NotebookEdit`, carrying two
+  refusals: `ballast-dispatch.py`'s own (a direct write of any
+  `workstream.json` under the state root) and Ballast's approval gate for
+  the four gated files. The wrapper now returns the shim's exit code
+  VERBATIM - without that, a refusal reads as an allow and the entry is
+  wired but inert.
+- **The manifest gate is field-aware.** `maintains`, `direct_report`,
+  `collaborate` and `absorbed` need a fresh approval; every other field,
+  `last_touched` included, is untouched by it.
+- **Scope defaults + migration.** A new scope is written from Ballast
+  0.1.2's `fixtures/scope-example/ballast.json` verbatim; an existing one
+  still byte-identical to the 0.1.1 default is replaced with it. A
+  customized scope is never touched.
+- **Four vendored skills** (`policy`, `global-policy`, `glossary`,
+  `playbook`) and the new read-only **`/workstream:status`**.
+- **A whole-output bound** on `boot.py`, `remind.py` and `precompact.py`.
+- `shim/ballast-shim.py` re-copied byte-identical from Ballast 0.1.2.
 
 ## What
 
@@ -19,15 +51,23 @@ see `docs/dependencies.md` and each script's own module docstring.
 - `scripts/workstream_lib.py` - shared, import-only module: config/path
   resolution, the session->workstream binding read, the ONE manifest-scan
   function (`discover_manifests`/`find_problems`/`resolve_ref_display`)
-  boot/list/graph/connect all share, and the three dependency-degrade
-  detectors (`ballast_available`, `vault_lock_available`, `grill_available`).
+  boot/list/graph/connect all share, the three dependency-degrade
+  detectors (`ballast_available`, `vault_lock_available`,
+  `grill_available`), `ballast_script()` (the path of one of Ballast's own
+  scripts, for the callers that must RUN one), and `guard_delivery()`
+  (the whole-output bound every hook here writes through).
 - `scripts/sidecar.py` - the sidecar primitive (I5, L3): maps a transcript
   id -> `born_session`; writes, resolves, and SELF-HEALS (a missing/stale
   sidecar gets a loud line, never silence).
 - `scripts/manifest.py` - the manifest primitive (I3-I5): schema authority
-  for `workstream.json`, single-writer-per-manifest, plus the ONE
-  sanctioned cross-manifest write (`absorb-close`, AB1-AB7), vault-lock-
-  wrapped when vault-lock is available.
+  for `workstream.json`, single-writer-per-manifest, the field-aware
+  approval gate (`maintains`/`direct_report`/`collaborate`/`absorbed`),
+  plus the ONE sanctioned cross-manifest write (`absorb-close`,
+  AB1-AB7), vault-lock-wrapped when vault-lock is available.
+- `scripts/status.py` - the read-only artifact printer behind
+  `/workstream:status`: the six files, each with its size against its cap
+  (hot.md also per-slot), then the contents verbatim. Never writes,
+  never interprets.
 - `scripts/boot.py` - `SessionStart` (no matcher - fires on every source
   including compact, V1/X2/X3): the session-id echo line, then (when
   bound) the ~1 KB identity block read straight from the manifest.
@@ -44,9 +84,8 @@ see `docs/dependencies.md` and each script's own module docstring.
 - `docs/dependencies.md`, `docs/migration.md`, `docs/workstream-model.md`.
 
 No `agents/` directory and no persona fields (`tier`/`model`/`home`) in
-the manifest - hooks plus primitives plus (eventually) 12 skills,
-contributed the way `vault-lock`/`grill` are, never a persona a session
-talks to.
+the manifest - hooks plus primitives plus 16 skills, contributed the way
+`vault-lock`/`grill` are, never a persona a session talks to.
 
 ## Why this exists
 
@@ -81,15 +120,21 @@ someone else's 22-37 KB payload.
 
 ## Continuity is Ballast's, not this plugin's
 
-`hot.md`/`log.md`/`policy.md`/`index.md` inside each workstream's own dir
-are a **Ballast scope** (B1-B5). Because this plugin owns *many* scopes -
+`hot.md`/`log.md`/`policy.md`/`glossary.md`/`playbook.md`/`index.md`
+inside each workstream's own dir are a **Ballast scope** (B1-B5), and
+`<state_root>/_global/` is a second, shared one every bound session reads
+on top of its own. Because this plugin owns *many* scopes -
 one per bound workstream directory, resolved at runtime from the
 session's own sidecar, not one static scope per plugin - it cannot use
 Ballast's static per-plugin hook template as-is (Ballast's own docs call
 this case out: `docs/consumer-hooks.json.snippet`). `scripts/ballast- dispatch.py` is the small wrapper that resolves the bound scope first,
-then execs the byte-identical `shim/ballast-shim.py` with `--scope <ws_dir>/ballast.json` (auto-created from the documented default scope on
-first use, never overwritten after). Unbound sessions are a near-zero-
-cost no-op - no ballast invocation at all.
+then runs the byte-identical `shim/ballast-shim.py` with `--scope <ws_dir>/ballast.json` (written from the documented default scope on
+first use; an existing one is migrated only when it is still byte-for-byte
+the 0.1.1 default, and a customized scope is never overwritten). It
+forwards `--part` untouched, resolves `<state_root>/_global/ballast.json`
+under `--scope-kind global`, and returns the shim's exit code VERBATIM so
+a refusal stays a refusal. Unbound sessions are a near-zero-cost no-op -
+no ballast invocation at all. Full wiring: `docs/workstream-model.md`.
 
 ## Install
 
@@ -123,7 +168,7 @@ or on Windows:
 py -3 tests\test_workstream_lib.py
 ```
 
-115 tests total, including the crafted-stdin cases for `boot.py`/
+220 tests total, including the crafted-stdin cases for `boot.py`/
 `remind.py`/`precompact.py` (28 across the three - see each file's own
 module docstring for the enumerated cases), the manifest single-writer +
 absorb cross-write (including every mutating primitive's `--dry-run`/

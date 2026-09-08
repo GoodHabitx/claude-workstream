@@ -67,9 +67,22 @@ under this plugin's own namespace** (`/workstream:<verb>`):
   render and the artifacts came out as specified. Bare = show/validate this
   workstream's own manifest; with args = set a field. Backed by
   `scripts/manifest.py`.
-- `policy` — add, edit, or remove a durable standing policy on a
-  workstream's `policy.md` (Ballast's file — `## Maintains` no longer
-  lives here, see "Policy layer," below).
+- `policy` — replace a workstream's `policy.md` (Ballast's file —
+  `## Maintains` no longer lives here, see "Policy layer," below).
+  **Vendored from Ballast's own template** (0.1.4), so the procedure that
+  asks Adam is the same one every consumer of that gate runs.
+- `global-policy` — the same, for `<state_root>/_global/global-policy.md`:
+  the ONE rules file every bound session injects at boot on top of its own
+  `policy.md`. Vendored; creates the `_global/` scope (Ballast's
+  `fixtures/scope-global/ballast.json` plus an EMPTY `global-policy.md`)
+  when it does not exist yet.
+- `glossary` — add, edit or delete a term in `glossary.md`. Vendored.
+- `playbook` — add, edit or delete a `when:`-triggered recipe in
+  `playbook.md`; only matched entries inject. Vendored.
+- `status` — print this workstream's six artifacts (manifest, hot,
+  policy, global-policy, glossary, playbook), each with its byte count
+  against its cap and hot.md with its per-slot lengths, then the contents
+  VERBATIM. Read-only, no interpretation. Backed by `scripts/status.py`.
 - `sidecar` — the self-healing binding primitive. Backed by
   `scripts/sidecar.py`.
 
@@ -391,11 +404,19 @@ wiki node, no vault-side storage at all.
 - `<state_root>/<born_session>/workstream.json` — **the manifest,
   durable, git-tracked**: the record of truth. See the schema below.
 - `<state_root>/<born_session>/hot.md` / `log.md` / `policy.md` /
-  `index.md` — **Ballast's four classes**, per its own scope declaration
+  `glossary.md` / `playbook.md` / `index.md` — **Ballast's six classes**,
+  per its own scope declaration
   (`<state_root>/<born_session>/ballast.json`, auto-created by
   `ballast-dispatch.py` on first use — see "Policy layer," below, and
   `docs/dependencies.md`). This plugin declares the scope; Ballast keeps
-  the files fresh.
+  the files fresh. `/workstream:status` prints any of them, with its size
+  against the cap the scope declares.
+- `<state_root>/_global/ballast.json` + `global-policy.md` — the **global
+  scope**: one shared rules file every bound session injects at boot on
+  top of its own `policy.md`. A second `--scope`, nothing more — no code
+  special-cases it, and nothing sums budget across the two. Seeded by
+  `/workstream:global-policy`; until it exists the global SessionStart
+  delivery is silent.
 - `<state_root>/<born_session>/tasks.md` — **not part of this suite**
   (X9: no tasks artifact — a workstream wanting a task list adds a
   `/work` project or tracker to `maintains[]` instead).
@@ -436,6 +457,51 @@ Three hooks, deterministic, no model judgment in whether they fire:
   (name, focus, state, "preserve in-flight work") so the compaction
   SUMMARY itself preserves identity — distinct from `boot.py`'s own
   re-injection on the SessionStart that follows compaction.
+
+All three bound their ENTIRE stdout with `workstream_lib.guard_delivery`
+before writing it: over the harness's measured 9,687 B inline cap (less a
+256 B margin) a hook command's whole payload is persisted to a file and
+only a ~2 KB preview inlines — defect D1 at one remove. Each already caps
+its own content well below that, so the guard is the bound, not the
+working limit.
+
+### The Ballast wiring (`scripts/ballast-dispatch.py`)
+
+Six more hook commands, all through the one wrapper, which resolves which
+`ballast.json` applies and execs the byte-identical shim:
+
+- **SessionStart × 5** — `--part hot`, `--part policy`, `--part glossary`,
+  `--part playbook`, each on its OWN command because the harness caps each
+  command's stdout independently; plus `--part policy --scope-kind global`
+  for the shared `_global/` scope. Ordering between parts is not
+  guaranteed and nothing depends on it — every block self-identifies by
+  its own heading.
+- **UserPromptSubmit** — Ballast's re-ground, listed ABOVE `remind.py` on
+  that slot (X4).
+- **PostToolUse** — the log-append + index regen.
+- **PreCompact** — hot.md + the delta only. Neither policy.md, glossary.md
+  nor playbook.md rides the summarizer; each re-injects at the
+  compact-source SessionStart.
+- **Stop** — Ballast's freshness/completion gate.
+- **PreToolUse** (`Write|Edit|NotebookEdit`) — two refusals, in order:
+  this wrapper's own (a direct write of any `workstream.json` under the
+  state root — manifests go through `scripts/manifest.py`), then
+  Ballast's approval gate for policy.md / global-policy.md / playbook.md /
+  glossary.md.
+
+Both refusals are the hook protocol's exit 2 with the reason on stderr,
+and the wrapper returns the shim's exit code VERBATIM. That last point is
+the whole gate: a wrapper that copies the output and returns 0 turns
+every refusal into an allow, so the entry looks wired and enforces
+nothing.
+
+The global scope is wired to SessionStart ONLY. Not Stop (the harness's
+Stop anti-loop flag is per-turn, so a second Ballast-backed Stop hook
+makes both fail open), and not PreCompact (it re-injects at the
+compact-source SessionStart anyway).
+
+An unbound session is a near-zero-cost no-op on every one of these: one
+sidecar lookup, no output, exit 0, no Ballast invocation at all.
 
 The manifest schema (target, this build):
 ```json
@@ -493,6 +559,32 @@ strategies/behaviors, written via the `policy` skill.
 that domain's plugin; an outside-vault path → the workstream self-
 maintains it in-session. Either way, two logs get the entry (the domain's
 and the workstream's own).
+
+## The manifest's approval gate (B2, 0.1.4)
+
+Four manifest fields need a fresh one-time approval token before
+`manifest.py` will write them: **`maintains`, `direct_report`,
+`collaborate`, `absorbed`**. They are the fields that reshape the FLEET
+rather than this workstream's own description of itself — who it answers
+to, who it works with, what it owns, what it swallowed — and each shows
+up in another workstream's graph, so an unreviewed edit silently rewires
+the org chart.
+
+Everything else is ungated on purpose: `state`, `focus`, `name`, lineage,
+the immutables, the append-only audit arrays, `last_touched`. Gating a
+field machinery writes on a cadence would fail every hook-driven manifest
+write in the vault — a strictly worse failure than the one the gate
+prevents. `create` is ungated (it writes those fields EMPTY; gating birth
+would make adopt/fork unreachable), `absorb-close` is ungated (it writes
+`state` + `absorbed_by`/`absorbed_by_session`), and a no-op assignment is
+ungated (nothing changed for anyone to have reviewed).
+
+The token convention is Ballast's (`docs/approval-gate.md`): mint after
+showing Adam the exact before/after, one approval, one write, consumed by
+the write it authorizes. `<state_root>/ballast-gate.disabled` disarms it
+here exactly as it does for Ballast. The gate proves only that the
+sanctioned path was used; what actually asks is step 4 of
+`/workstream:manifest`.
 
 ## The connect audit — invariants (V4, adapted for absorbed[])
 
