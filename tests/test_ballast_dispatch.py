@@ -28,6 +28,20 @@ import sidecar
 
 DISPATCH = os.path.join(SCRIPTS, "ballast-dispatch.py")
 
+
+def _load_dispatch_module():
+    """`ballast-dispatch` is not an importable module name (the hyphen is
+    load-bearing in the hook line), so the scope-default constants are
+    loaded by path rather than restated in this file - a copy here would
+    pass while the shipped constant drifted."""
+    spec = importlib.util.spec_from_file_location("ballast_dispatch", DISPATCH)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+dispatch_mod = _load_dispatch_module()
+
 FAKE_SHIM = """#!/usr/bin/env python3
 import sys
 sys.stdout.write("FAKE-SHIM-CALLED event=%s argv=%r\\n" % (sys.argv[1], sys.argv))
@@ -122,6 +136,79 @@ class BallastDispatchFakeShimTests(unittest.TestCase):
         with open(scope_path) as f:
             scope_after = json.load(f)
         self.assertEqual(scope_after["hot_cap_bytes"], 999)
+
+
+class BallastDispatchScopeMigrationTests(unittest.TestCase):
+    """B3: the default a first dispatch writes is ballast 0.1.2's
+    fixtures/scope-example/ballast.json verbatim, and a scope still holding
+    the 0.1.1 default byte-for-byte is replaced with it. Anything else is a
+    decision somebody made and is never overwritten."""
+
+    def setUp(self):
+        self.vault = make_vault()
+        self.fake_root = tempfile.mkdtemp(prefix="ws_fake_plugin_root_")
+        os.makedirs(os.path.join(self.fake_root, "shim"))
+        with open(os.path.join(self.fake_root, "shim", "ballast-shim.py"), "w") as f:
+            f.write(FAKE_SHIM)
+        mprim.create_manifest(self.vault, "born-mig", "wsmig", "f")
+        sidecar.write(self.vault, "sess-mig", "born-mig")
+        self.scope_path = os.path.join(wslib.state_root(self.vault), "born-mig",
+                                       "ballast.json")
+
+    def tearDown(self):
+        shutil.rmtree(self.vault, ignore_errors=True)
+        shutil.rmtree(self.fake_root, ignore_errors=True)
+
+    def _dispatch(self):
+        return run_dispatch(self.vault, "SessionStart", self.fake_root,
+                            json.dumps({"session_id": "sess-mig"}))
+
+    def _read(self):
+        with open(self.scope_path, encoding="utf-8", newline="") as handle:
+            return handle.read()
+
+    def test_the_old_default_text_is_what_0_1_1_actually_wrote(self):
+        """The migration only fires on a byte-exact match, so the constant
+        has to be exactly `json.dumps(old_dict, indent=2) + newline` - the
+        text the wrapper itself used to produce."""
+        old_dict = json.loads(dispatch_mod.OLD_DEFAULT_SCOPE_TEXT)
+        self.assertEqual(json.dumps(old_dict, indent=2) + "\n",
+                         dispatch_mod.OLD_DEFAULT_SCOPE_TEXT)
+        self.assertEqual(old_dict["hot_cap_bytes"], 1024)
+
+    def test_first_write_is_the_new_default_verbatim(self):
+        self._dispatch()
+        self.assertEqual(self._read(), dispatch_mod.DEFAULT_SCOPE_TEXT)
+        scope = json.loads(self._read())
+        self.assertEqual(scope["hot_cap_bytes"], 4096)
+        self.assertEqual(scope["glossary"], "glossary.md")
+        self.assertEqual(scope["playbook"], "playbook.md")
+        self.assertEqual(scope["playbook_inject_cap_bytes"], 2048)
+
+    def test_an_untouched_old_default_is_migrated(self):
+        wslib.atomic_write_lf(self.scope_path, dispatch_mod.OLD_DEFAULT_SCOPE_TEXT)
+        self._dispatch()
+        self.assertEqual(self._read(), dispatch_mod.DEFAULT_SCOPE_TEXT)
+
+    def test_a_customized_scope_is_never_migrated(self):
+        customized = dispatch_mod.OLD_DEFAULT_SCOPE_TEXT.replace(
+            '"hot_cap_bytes": 1024', '"hot_cap_bytes": 8192')
+        wslib.atomic_write_lf(self.scope_path, customized)
+        self._dispatch()
+        self.assertEqual(self._read(), customized)
+
+    def test_a_scope_already_on_the_new_default_is_left_alone(self):
+        wslib.atomic_write_lf(self.scope_path, dispatch_mod.DEFAULT_SCOPE_TEXT)
+        before = os.path.getmtime(self.scope_path)
+        self._dispatch()
+        self.assertEqual(self._read(), dispatch_mod.DEFAULT_SCOPE_TEXT)
+        self.assertEqual(os.path.getmtime(self.scope_path), before)
+
+    def test_migration_is_idempotent(self):
+        wslib.atomic_write_lf(self.scope_path, dispatch_mod.OLD_DEFAULT_SCOPE_TEXT)
+        self._dispatch()
+        self._dispatch()
+        self.assertEqual(self._read(), dispatch_mod.DEFAULT_SCOPE_TEXT)
 
 
 class BallastDispatchPartTests(unittest.TestCase):

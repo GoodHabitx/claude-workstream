@@ -52,9 +52,10 @@ existing dir - the common case for most sessions/most turns): near-zero-
 cost no-op, exit 0, no output, no ballast invocation at all.
 
 Bound sessions: ensures a ballast.json exists in the workstream's own dir
-(writing the documented default scope - fixtures/scope-example/
-ballast.json verbatim - on first use only; a scope a workstream skill has
-already customized is left untouched), then runs the shim with
+(writing the documented default scope - ballast 0.1.2's
+fixtures/scope-example/ballast.json verbatim - on first use, and
+migrating a scope that still holds the old 0.1.1 default byte-for-byte;
+a customized scope is left untouched), then runs the shim with
 --scope <ws_dir>/ballast.json, forwarding stdin/stdout/stderr byte for
 byte (the shim already fails open if ballast itself is not installed -
 this wrapper adds no new failure mode on top of that).
@@ -67,29 +68,69 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import workstream_lib as wslib
 
-# Verbatim copy of ballast's fixtures/scope-example/ballast.json (docs/
-# ballast.json.md) - the workstream scope IS the documented default scope,
-# since 02/04g's hot required_slots are exactly the nine names ballast.json
-# already defaults to. A workstream that needs a different scope can edit
-# its own <ws_dir>/ballast.json after this first write; this wrapper never
-# overwrites an existing one.
-DEFAULT_SCOPE = {
-    "root": ".",
-    "log": "log.md",
-    "hot": "hot.md",
-    "index": "index.md",
-    "policy": "policy.md",
-    "regen": None,
-    "hot_cap_bytes": 1024,
-    "policy_cap_bytes": 7168,
-    "required_slots": [
-        "focus", "next", "blocked", "updated",
-        "done", "looping", "progressing", "who-acts-next", "stall",
-    ],
-    "significant_write_rule": "path-under-root",
-    "reground_interval_turns": 25,
-    "min_engine": "0.1.0",
+# Verbatim copy of ballast 0.1.2's fixtures/scope-example/ballast.json
+# (docs/ballast.json.md prints the same text as its Example) - the
+# workstream scope IS the documented default scope, since 02/04g's hot
+# required_slots are exactly the nine names ballast.json already defaults
+# to. Held as TEXT, not a dict, so what lands on disk is byte-identical to
+# the fixture rather than whatever json.dumps happens to render.
+DEFAULT_SCOPE_TEXT = """{
+  "root": ".",
+  "log": "log.md",
+  "hot": "hot.md",
+  "index": "index.md",
+  "policy": "policy.md",
+  "glossary": "glossary.md",
+  "playbook": "playbook.md",
+  "regen": null,
+  "hot_cap_bytes": 4096,
+  "policy_cap_bytes": 7168,
+  "glossary_cap_bytes": 4096,
+  "playbook_inject_cap_bytes": 2048,
+  "playbook_file_warn_bytes": 16384,
+  "required_slots": [
+    "focus", "next", "blocked", "updated",
+    "done", "looping", "progressing", "who-acts-next", "stall"
+  ],
+  "significant_write_rule": "path-under-root",
+  "reground_interval_turns": 25,
+  "min_engine": "0.1.0"
 }
+"""
+
+# The 0.1.1 default this wrapper used to write - `json.dumps(DEFAULT_SCOPE,
+# indent=2) + "\\n"` of the dict it then held - kept verbatim so the
+# migration below can recognize it. A scope holding EXACTLY these bytes was
+# written by the wrapper and never touched by anyone, so replacing it loses
+# no choice a person made. Anything else - a raised cap, a dropped class, a
+# hand-written scope - is a decision, and is left alone; /workstream:status
+# prints its caps so the owner can see what it is still running and raise
+# them deliberately.
+OLD_DEFAULT_SCOPE_TEXT = """{
+  "root": ".",
+  "log": "log.md",
+  "hot": "hot.md",
+  "index": "index.md",
+  "policy": "policy.md",
+  "regen": null,
+  "hot_cap_bytes": 1024,
+  "policy_cap_bytes": 7168,
+  "required_slots": [
+    "focus",
+    "next",
+    "blocked",
+    "updated",
+    "done",
+    "looping",
+    "progressing",
+    "who-acts-next",
+    "stall"
+  ],
+  "significant_write_rule": "path-under-root",
+  "reground_interval_turns": 25,
+  "min_engine": "0.1.0"
+}
+"""
 
 GLOBAL_DIRNAME = "_global"
 MANIFEST_FILENAME = "workstream.json"
@@ -204,11 +245,20 @@ def manifest_write_refused(payload, vault):
 
 
 def ensure_scope(ws_dir):
+    """The workstream's own ballast.json: written from the documented
+    default on first use, MIGRATED when it still holds the 0.1.1 default
+    byte-for-byte, and otherwise never touched."""
     scope_path = os.path.join(ws_dir, "ballast.json")
     if os.path.isfile(scope_path):
-        return scope_path
+        try:
+            with open(scope_path, "r", encoding="utf-8", newline="") as handle:
+                existing = handle.read()
+        except OSError:
+            return scope_path   # unreadable: ballast.py falls back to its own defaults
+        if existing.replace("\r\n", "\n") != OLD_DEFAULT_SCOPE_TEXT:
+            return scope_path   # customized, or already current - leave it alone
     try:
-        wslib.atomic_write_lf(scope_path, json.dumps(DEFAULT_SCOPE, indent=2) + "\n")
+        wslib.atomic_write_lf(scope_path, DEFAULT_SCOPE_TEXT)
     except OSError:
         pass   # ballast.py falls back to its own built-in minimal defaults if unreadable
     return scope_path
