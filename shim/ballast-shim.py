@@ -44,7 +44,9 @@ reads the registry the harness itself writes):
 Fails OPEN, always: if ballast cannot be found ANYWHERE by the above, or
 resolves but errors, this shim prints exactly ONE stderr notice and exits
 0 — a consumer must never fail its own hook (startup, a turn, a
-compaction) because ballast is not installed. `no Ballast -> the plugin
+compaction) because ballast is not installed. The single exception is
+ballast's own PreToolUse approval refusal, exit 2, which is forwarded
+verbatim: swallowing it would turn every refusal into an allow. `no Ballast -> the plugin
 refuses to adopt` (per the decision register) is a CONSUMER-level policy
 decision made elsewhere (e.g. a workstream's own `adopt` verb checking for
 ballast explicitly); this shim's only job is per-event forwarding, and it
@@ -58,6 +60,11 @@ import subprocess
 import sys
 
 INTERPRETER_CANDIDATES = ("python3", "python", "py -3", "py")
+
+# The hook protocol's refusal code, duplicated here because this file is
+# standalone by contract (it is copied into consumers, and cannot import
+# ballast_lib). Kept in step with ballast_lib.REFUSAL_EXIT.
+REFUSAL_EXIT = 2
 
 
 def _try_path(path):
@@ -192,6 +199,14 @@ def main(argv):
             sys.stdout.buffer.write(proc.stdout)
         if proc.stderr:
             sys.stderr.buffer.write(proc.stderr)
+        # Forward the ONE deliberate non-zero code ballast uses: 2, the
+        # PreToolUse approval refusal (hook protocol: exit 2 + the reason
+        # on stderr). Swallowing it would turn every refusal into an
+        # allow, so the gate would look wired and enforce nothing.
+        # EVERY other code maps to 0 — fail open is this shim's whole
+        # contract, and a crash in ballast.py must never block a turn.
+        if proc.returncode == REFUSAL_EXIT:
+            return REFUSAL_EXIT
     except Exception as exc:
         sys.stderr.write("ballast-shim: forwarding to ballast.py failed "
                          "(fail open): %r\n" % exc)

@@ -329,6 +329,44 @@ class BallastDispatchExitCodeTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 2)
         self.assertIn("FAKE-BALLAST-REFUSAL", proc.stderr)
 
+    def test_the_vendored_shim_forwards_a_refusal_and_swallows_the_rest(self):
+        """End to end through THIS plugin's own copied shim, against a stub
+        ballast.py installed as a sibling: exit 2 (and only 2) survives.
+        The 0.1.1 shim mapped every non-zero code to 0, which would have
+        left the whole PreToolUse gate wired and inert."""
+        plugins_root = tempfile.mkdtemp(prefix="ws_plugins_root_")
+        old_env = dict(os.environ)
+        try:
+            own_root = os.path.join(plugins_root, "workstream")
+            shutil.copytree(PLUGIN_ROOT, own_root,
+                            ignore=shutil.ignore_patterns(".git", "__pycache__"))
+            ballast_scripts = os.path.join(plugins_root, "ballast", "scripts")
+            os.makedirs(ballast_scripts)
+            stub = os.path.join(ballast_scripts, "ballast.py")
+            os.environ["CLAUDE_PLUGIN_ROOT"] = own_root
+
+            for code, expected in ((2, 2), (1, 0), (7, 0), (0, 0)):
+                wslib.atomic_write_lf(stub,
+                                      "#!/usr/bin/env python3\n"
+                                      "import sys\n"
+                                      "sys.stderr.write('STUB-BALLAST code=%d\\n')\n"
+                                      "sys.exit(%d)\n" % (code, code))
+                proc = subprocess.run(
+                    [sys.executable,
+                     os.path.join(own_root, "scripts", "ballast-dispatch.py"),
+                     "PreToolUse", own_root],
+                    cwd=self.vault,
+                    input=json.dumps({"session_id": "sess-x", "tool_name": "Write",
+                                      "tool_input": {"file_path": "notes.md"}}),
+                    capture_output=True, text=True)
+                self.assertEqual(proc.returncode, expected,
+                                 "ballast exit %d -> hook exit %d (wanted %d)"
+                                 % (code, proc.returncode, expected))
+        finally:
+            shutil.rmtree(plugins_root, ignore_errors=True)
+            os.environ.clear()
+            os.environ.update(old_env)
+
 
 class BallastDispatchManifestGuardTests(unittest.TestCase):
     """B1: the wrapper's own refusal - a direct Write/Edit/NotebookEdit of a
