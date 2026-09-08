@@ -36,6 +36,14 @@ dedup: "the boot command clears the turn counter on every fire; remind
 reads that stamp first, so the next prompt after a fresh boot doesn't
 re-show identity").
 
+The WHOLE stdout of this hook command passes through
+workstream_lib.guard_delivery before it is written (B5): the harness caps
+each hook command's stdout independently, and over that cap the entire
+payload is persisted to a file with only a ~2 KB preview inlined - defect
+D1 in a new costume. The identity block's own IDENTITY_CAP keeps this
+delivery two orders of magnitude under the guard in practice; the guard is
+the bound, not the working limit.
+
 Never crashes: every I/O path degrades to a NOTE; the outer seatbelt
 catches anything unforeseen and exits 0 regardless (a broken boot hook
 must never decapitate a session).
@@ -233,7 +241,8 @@ def main():
                       "/workstream:connect. A new session: /workstream:adopt."
                       % session_id[:8])
 
-    sys.stdout.write("\n\n".join(out) + "\n")
+    sys.stdout.write(wslib.guard_delivery("\n\n".join(out) + "\n",
+                                          "SessionStart (workstream boot)"))
     return 0
 
 

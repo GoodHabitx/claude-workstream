@@ -11,6 +11,10 @@ summary preserves, never duplicating that injection.
 Unbound sessions (no sidecar, or born_session doesn't resolve to an
 existing dir): print nothing, exit 0 - same near-zero-cost discipline as
 every other hook here. Read-only end to end - never writes anything.
+
+The whole stdout of this hook command passes through
+workstream_lib.guard_delivery before it is written (B5) - the same bound
+boot.py and remind.py carry, for the same reason.
 """
 import json
 import os
@@ -75,7 +79,9 @@ def main():
     if not ws_dir:
         return 0
 
-    print(build_note(vault, born_session, ws_dir))
+    note = build_note(vault, born_session, ws_dir)
+    sys.stdout.write(wslib.guard_delivery(note + "\n",
+                                          "PreCompact (workstream note)"))
     return 0
 
 

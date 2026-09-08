@@ -172,6 +172,59 @@ def atomic_write_json(path, obj, dry_run=False):
 
 
 # --------------------------------------------------------------------------
+# the whole-output guard (B5) - one bound per hook command's entire stdout
+# --------------------------------------------------------------------------
+
+# The harness caps EACH hook command's stdout independently: over this, the
+# whole payload is persisted to a file and only a ~2 KB preview is inlined,
+# which is defect D1 (the identity block buried in someone else's oversized
+# payload) in a new costume. Same measured figure ballast guards against,
+# and the same margin, because it IS measured rather than documented -
+# landing exactly on it would bet a whole delivery on the measurement being
+# exact.
+INLINE_CEILING = 9687
+GUARD_MARGIN_BYTES = 256
+
+DELIVERY_TRIM_MARKER = ("## Workstream - TRIMMED %s: %d B over the %d B guard "
+                        "(the %d B inline cap less a %d B margin)")
+DELIVERY_TRIM_PREFIX = "## Workstream - TRIMMED "
+
+
+def delivery_limit():
+    """The byte budget ONE hook command's stdout may use."""
+    return INLINE_CEILING - GUARD_MARGIN_BYTES
+
+
+def guard_delivery(text, label):
+    """Bound one whole hook delivery just before it is written.
+
+    Under budget: returned unchanged. Over: ONE loud marker line naming
+    the delivery and by how much, then the text trimmed to fit - the model
+    is told what it is missing rather than losing the entire payload to the
+    harness's persist-and-preview fallback. Never raises, and never stacks
+    a second marker on already-marked text.
+
+    Each of this plugin's three own hooks already caps its own content
+    (boot's identity block, precompact's note), so in practice this guard
+    is the backstop rather than the working limit; it exists because a cap
+    that is only enforced where someone remembered to enforce it is not a
+    bound at all."""
+    limit = delivery_limit()
+    raw = (text or "").encode("utf-8")
+    if len(raw) <= limit:
+        return text
+    if text.startswith(DELIVERY_TRIM_PREFIX):
+        return raw[:max(0, limit)].decode("utf-8", "ignore")
+    marker = (DELIVERY_TRIM_MARKER
+              % (label, len(raw) - limit, limit, INLINE_CEILING,
+                 GUARD_MARGIN_BYTES)) + "\n"
+    room = limit - len(marker.encode("utf-8"))
+    if room <= 0:
+        return marker.rstrip("\n")
+    return marker + raw[:room].decode("utf-8", "ignore")
+
+
+# --------------------------------------------------------------------------
 # session -> workstream binding (the sidecar read side of the primitive;
 # sidecar.py owns the write/self-heal side)
 # --------------------------------------------------------------------------

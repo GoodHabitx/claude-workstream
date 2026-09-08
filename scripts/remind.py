@@ -14,6 +14,10 @@ purely a hooks.json wiring fact.
 
 Unbound sessions: near-zero-cost no-op (one sidecar lookup, no counter
 file touched, no output) - the overwhelming common case.
+
+The whole stdout of this hook command passes through
+workstream_lib.guard_delivery before it is written (B5) - the same bound
+boot.py and precompact.py carry, for the same reason.
 """
 import json
 import os
@@ -85,7 +89,9 @@ def main():
         return 0   # unbound: near-zero-cost no-op
 
     if bump_and_check(vault, session_id):
-        print(workstream_boot.render_identity_block(vault, born_session, ws_dir))
+        block = workstream_boot.render_identity_block(vault, born_session, ws_dir)
+        sys.stdout.write(wslib.guard_delivery(block + "\n",
+                                              "UserPromptSubmit (workstream remind)"))
     return 0
 
 
