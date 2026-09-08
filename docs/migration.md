@@ -116,8 +116,7 @@ The principal moved the tree: `staff/cos/workstreams` -> `.vault-meta/workstream
   were running - the check ran from a skill's shell, not a hook, so
   `CLAUDE_PLUGIN_ROOT` was unset and the old single-path HOME fallback
   looked for `cache/ballast/...` when the real installed-cache shape
-  nests a plugin under its marketplace name (`cache/<marketplace>/
-  ballast/<semver>/scripts/ballast.py`). Fixed with a three-step fallback
+  nests a plugin under its marketplace name (`cache/<marketplace>/ ballast/<semver>/scripts/ballast.py`). Fixed with a three-step fallback
   in `scripts/workstream_lib.py`: (1) the existing CLAUDE_PLUGIN_ROOT
   sibling lookup, unchanged; (2) a marketplace-glob scan of
   `~/.claude/plugins/cache/*/ballast/*/scripts/ballast.py`; (3)

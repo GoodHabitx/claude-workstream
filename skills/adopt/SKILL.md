@@ -24,27 +24,19 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 
 1. **Hard-dependency precheck FIRST — before touching anything.** Call
    `workstream_lib.adopt_precheck()` (import the core lib, or run a
-   one-liner: `python3 -c "import sys,os;
-   sys.path.insert(0,'scripts'); import workstream_lib as w;
-   ok,msg=w.adopt_precheck(); print(msg) if not ok else None;
-   sys.exit(0 if ok else 1)"` from the plugin root). On `(False, msg)`
+   one-liner: `python3 -c "import sys,os; sys.path.insert(0,'scripts'); import workstream_lib as w; ok,msg=w.adopt_precheck(); print(msg) if not ok else None; sys.exit(0 if ok else 1)"` from the plugin root). On `(False, msg)`
    — Ballast is not installed — **print `msg` verbatim and STOP.**
    Identity without continuity is the defect this plugin exists to fix,
    not a feature to ship anyway (the HARD dependency, per
    `docs/dependencies.md`).
 
-2. **Learn this session's identity.** Read the `<!--
-   workstream-session-id: ... -->` line boot.py injected. This is the
+2. **Learn this session's identity.** Read the `<!-- workstream-session-id: ... -->` line boot.py injected. This is the
    candidate `born_session` (the bare uuid). If the line is missing,
    boot.py didn't fire — say so, don't guess.
 
 3. **Check whether THIS session's own uuid is already a workstream —
-   BEFORE touching any name.** `python3 scripts/manifest.py read
-   <this-session-id>` (exit 0 = exists):
-   - **Exists and this session's title matches `^ws-<that manifest's
-     name>`** → plain **self-heal**: `python3 scripts/sidecar.py
-     self-heal <session_id> <born_session> --name <name> --focus
-     <focus>` (values from the existing manifest — no new mint). Stop —
+   BEFORE touching any name.** `python3 scripts/manifest.py read <this-session-id>` (exit 0 = exists):
+   - **Exists and this session's title matches `^ws-<that manifest's name>`** → plain **self-heal**: `python3 scripts/sidecar.py self-heal <session_id> <born_session> --name <name> --focus <focus>` (values from the existing manifest — no new mint). Stop —
      don't ask, don't re-confirm the title, don't proceed further.
    - **Exists but the title doesn't match** → REFUSE: report which
      workstream this session is already bound to (its manifest's
@@ -53,8 +45,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
      Stop.
    - **No manifest for this session's uuid** → proceed.
 
-4. **Resolve the target name.** Parse `<name>` as `[<name>] [—
-   <one-line focus>]`. Derive a short kebab name from context when none
+4. **Resolve the target name.** Parse `<name>` as `[<name>] [— <one-line focus>]`. Derive a short kebab name from context when none
    is given — a guess is fine, renaming is never locked
    (`workstream:refocus`).
 
@@ -75,8 +66,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
    - **No manifest with this name** → proceed to birth.
 
 6. **Birth the manifest** via the primitive's schema-init route:
-   `python3 scripts/manifest.py create <this-session-id> --name <name>
-   [--focus "<focus>"]` — writes the full canonical-empty shape
+   `python3 scripts/manifest.py create <this-session-id> --name <name> [--focus "<focus>"]` — writes the full canonical-empty shape
    (`spawned_from`/`spawned_from_session: null`, `direct_report: null`,
    `collaborate: []`, `refocused: []`, `previous_names: []`,
    `projects: []`, `maintains: []`, `absorbed: []`; **no `parents`
@@ -88,8 +78,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 7. **Set the title.** `set_session_title("self", "ws-<name>")` — just
    `ws-` + the name, no focus suffix.
 
-8. **Write the sidecar.** `python3 scripts/sidecar.py write
-   <session_id> <this-session-id> --name <name> --focus "<focus>"`.
+8. **Write the sidecar.** `python3 scripts/sidecar.py write <session_id> <this-session-id> --name <name> --focus "<focus>"`.
 
 9. **Ballast owns `hot.md`/`log.md`/`policy.md`/`index.md` creation for
    the new scope** — not this skill (X7/B2). If the scope isn't picked

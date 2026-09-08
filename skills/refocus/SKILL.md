@@ -46,9 +46,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 3. **Apply the settled changes by routing each write through the
    owning primitive** — never hand-roll a manifest or policy edit:
    - **focus** → `workstream:manifest` ("focus"), THEN update the
-     sidecar's focus mirror to match, right here (`python3
-     scripts/sidecar.py write <session_id> <born_session> --name
-     <name> --focus "<new-focus>"`) — **including a focus-only refocus
+     sidecar's focus mirror to match, right here (`python3 scripts/sidecar.py write <session_id> <born_session> --name <name> --focus "<new-focus>"`) — **including a focus-only refocus
      with no rename** (step 4 is rename-gated and never runs then).
    - **name** (+ its `previous_names` append) → `workstream:manifest`
      ("name"/"previous_names" — refocus's delegate) — but the
@@ -71,8 +69,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
      from step 3.
    - Let `workstream:manifest` write `name` + append `previous_names`
      first (step 3), THEN: `set_session_title("self", "ws-<new-name>")`
-     and `python3 scripts/sidecar.py write <session_id> <born_session>
-     --name <new-name> --focus <current-focus>` (the sidecar's title
+     and `python3 scripts/sidecar.py write <session_id> <born_session> --name <new-name> --focus <current-focus>` (the sidecar's title
      mirror; focus mirror untouched here if it didn't also move —
      step 3 already wrote it if it did).
    - **The uuid-keyed cache dir never moves.**
@@ -85,14 +82,12 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
    - **Optional cosmetic ripple (never required, skipping is fully
      supported)**: if wanted, scan other manifests for a name half
      referring to `<old-name>` and update only that half — via notify
-     (live owner self-updates) or vault-lock (closed, `--session
-     <this-session-id>`), never a direct reach-in.
+     (live owner self-updates) or vault-lock (closed, `--session <this-session-id>`), never a direct reach-in.
    - **Regenerate the fleet views** (recommended, not load-bearing):
      `python3 scripts/views.py regen`.
 
 5. **Always append a `refocused` history entry** — via
-   `workstream:manifest` ("refocused — append"): `{date, from_focus,
-   to_focus, note}` (`note` records what else the refocus touched —
+   `workstream:manifest` ("refocused — append"): `{date, from_focus, to_focus, note}` (`note` records what else the refocus touched —
    name/links/policy). Append-only.
 
 6. **Confirm exactly what changed** — focus (old → new), name (with the

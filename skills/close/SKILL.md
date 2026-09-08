@@ -17,8 +17,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 
 ## `close [name]`
 
-1. **Target** = THIS session's bound workstream (`python3
-   scripts/sidecar.py resolve <session_id>`), or the named `<name>`
+1. **Target** = THIS session's bound workstream (`python3 scripts/sidecar.py resolve <session_id>`), or the named `<name>`
    resolved by scanning the state root's manifests. Hold the target's
    `born_session` uuid — every dependent edge resolves against it.
 
@@ -60,8 +59,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 5. **Drop the collaborators' reciprocal links — both sides.** For each
    collaborator from step 2, the counterpart runs
    `workstream:manifest` ("collaborate — remove") on its OWN manifest
-   — via notify (live) or vault-lock (closed, `--session
-   <this-session-id>`). This route is inherently two-sided: dropping
+   — via notify (live) or vault-lock (closed, `--session <this-session-id>`). This route is inherently two-sided: dropping
    the counterpart's entry pointing at the target ALSO reciprocity-
    removes the mirror on the target's manifest (now closed, so this is
    the closed-target vault-lock write). Zero collaborators → note it.

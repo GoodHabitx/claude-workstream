@@ -24,9 +24,7 @@ project/spine node.
 
 1. **Target = THIS session's bound workstream, always.** Read the
    `<!-- workstream-session-id: ... -->` line boot.py injected this
-   session for the transcript `session_id`. Resolve: `python3
-   scripts/sidecar.py resolve <session_id>` → JSON `{born_session,
-   ws_dir}` on stdout, exit 0. **Exit 1 (no sidecar) → refuse** — this
+   session for the transcript `session_id`. Resolve: `python3 scripts/sidecar.py resolve <session_id>` → JSON `{born_session, ws_dir}` on stdout, exit 0. **Exit 1 (no sidecar) → refuse** — this
    session isn't bound — and point to `/workstream:adopt`. There is no
    cross-session target argument; this verb never takes a `<name>`
    naming a different workstream.
@@ -34,16 +32,13 @@ project/spine node.
 2. **Single-writer, extended to every field.** This verb edits ONLY
    this session's OWN `workstream.json`. To change another workstream's
    manifest: notify its own session (live, see `workstream:notify`) and
-   let it self-apply, or — closed target only — `bash
-   .vault-meta/bin/vault-lock.sh acquire <path> --session
-   <this-session-id>`, write directly via `manifest.py set`, `release`.
+   let it self-apply, or — closed target only — `bash .vault-meta/bin/vault-lock.sh acquire <path> --session <this-session-id>`, write directly via `manifest.py set`, `release`.
    Never a direct reach-in on a live peer.
 
 3. **Bare invocation = show + validate + verify, read-only, STOP.**
    `python3 scripts/manifest.py read <born_session>` and print it.
    Validate: `direct_report` a single `{name, session}` object or
-   `null` (never a list); `collaborate` a list of `{name, session,
-   scope}`; `refocused`/`previous_names`/`projects`/`maintains`/
+   `null` (never a list); `collaborate` a list of `{name, session, scope}`; `refocused`/`previous_names`/`projects`/`maintains`/
    `absorbed` are arrays. An **active** manifest carrying legacy
    `parents`/`parent`/`parent_session`/`rebound` is flagged (dropped
    fields per the schema — offer a strip via step 4's field write, any
@@ -57,20 +52,16 @@ project/spine node.
      front-facing job, not this primitive's.
    - **direct_report — set** → resolve the target's `born_session` by
      reading ITS manifest (`manifest.py read <target-born-session>` — a
-     read, never a write), then `manifest.py set <born_session>
-     direct_report '"{\"name\":\"<target-name>\",\"session\":\"<target-born-session>\"}"'`.
+     read, never a write), then `manifest.py set <born_session> direct_report '"{\"name\":\"<target-name>\",\"session\":\"<target-born-session>\"}"'`.
      Refuse a self-report. Refuse (or warn loudly if the ask is
      explicit) a target whose `state` is `closed`/`absorbed` — that's
      an immediate connect invariant-3 violation; point at the target's
      own `direct_report` instead. This same route is what a **re-home**
      is (used by `close`/`absorb`).
-   - **direct_report — clear** → `manifest.py set <born_session>
-     direct_report null`.
+   - **direct_report — clear** → `manifest.py set <born_session> direct_report null`.
    - **collaborate — add** → resolve the peer's `born_session` (read
      its manifest; refuse if it doesn't resolve; refuse a
-     self-collaboration) → `manifest.py collaborate-add <born_session>
-     --peer-session <peer-born-session> --peer-name <peer-name>
-     [--scope <text>]` (idempotent on a duplicate peer-session — the
+     self-collaboration) → `manifest.py collaborate-add <born_session> --peer-session <peer-born-session> --peer-name <peer-name> [--scope <text>]` (idempotent on a duplicate peer-session — the
      core script no-ops rather than double-adding). Then **reciprocity**:
      notify the peer's live session (via `workstream:notify`) to add its
      own mirror entry the same way; if the peer is closed/unreachable,
@@ -79,11 +70,9 @@ project/spine node.
      target that looked reachable is WARN + PROCEED — the local half
      already stands; `connect`'s audit reconciles the one-sided edge
      later. Never hard-fail the op on a notify failure.
-   - **collaborate — remove** → `manifest.py collaborate-remove
-     <born_session> --peer-session <peer-born-session>`. Reciprocity-
+   - **collaborate — remove** → `manifest.py collaborate-remove <born_session> --peer-session <peer-born-session>`. Reciprocity-
      remove the mirror the same way (notify live / vault-lock closed).
-   - **refocused — append** → `manifest.py set <born_session> refocused
-     '"<full-array-with-new-entry-appended>"'` (read current, append
+   - **refocused — append** → `manifest.py set <born_session> refocused '"<full-array-with-new-entry-appended>"'` (read current, append
      `{date, from_focus, to_focus, note}`, write back — append-only,
      never edit/trim an existing entry). Called by `workstream:refocus`.
    - **name / previous_names** → **redirect the caller to
@@ -91,10 +80,8 @@ project/spine node.
      `previous_names` only as refocus's *delegate*; a bare rename here
      would leave the session title + sidecar stale. If invoked as that
      delegate: `manifest.py set <born_session> name '"<new>"'` then
-     `manifest.py set <born_session> previous_names
-     '"<array-with-old-name-appended>"'`.
-   - **state — set** (`active|closed|absorbed`) → `manifest.py set
-     <born_session> state '"<state>"'`. Normally the delegate of
+     `manifest.py set <born_session> previous_names '"<array-with-old-name-appended>"'`.
+   - **state — set** (`active|closed|absorbed`) → `manifest.py set <born_session> state '"<state>"'`. Normally the delegate of
      `workstream:close` (→ closed) or `workstream:absorb` (→ absorbed),
      which own the surrounding dependents-surfacing and re-home work
      before flipping this field. A flip to `absorbed` MUST pair with
@@ -102,25 +89,16 @@ project/spine node.
      successor. **Never touch `spawned_from`/`spawned_from_session`**
      — lineage is immutable.
    - **absorbed_by — set** → resolve the successor's `born_session`
-     (read its manifest), refuse a self-succession, then `manifest.py
-     set <born_session> absorbed_by '"<successor-name>"'` and
-     `manifest.py set <born_session> absorbed_by_session
-     '"<successor-born-session>"'` — set together with `state:
-     absorbed`. This is `workstream:absorb`'s delegate write.
-   - **absorbed[] — append** → `manifest.py append-absorbed
-     <born_session> --name <name> --absorbed-born-session <id> --dir
-     <path> [--transcript <path>]`. This is `workstream:absorb`'s
+     (read its manifest), refuse a self-succession, then `manifest.py set <born_session> absorbed_by '"<successor-name>"'` and
+     `manifest.py set <born_session> absorbed_by_session '"<successor-born-session>"'` — set together with `state: absorbed`. This is `workstream:absorb`'s delegate write.
+   - **absorbed[] — append** → `manifest.py append-absorbed <born_session> --name <name> --absorbed-born-session <id> --dir <path> [--transcript <path>]`. This is `workstream:absorb`'s
      delegate write (AB3, the determinism anchor) — never hand-rolled.
-   - **maintains[] — add/remove** → `manifest.py set <born_session>
-     maintains '"<full-array>"'` (read current, add/remove the
+   - **maintains[] — add/remove** → `manifest.py set <born_session> maintains '"<full-array>"'` (read current, add/remove the
      wikilink or absolute path, write back). Lives in the manifest, not
      `policy.md` (I6) — `workstream:policy`'s `## Maintains` route is
      retired; this is the only place `maintains[]` is written.
-   - **projects[] — union/add** → `manifest.py set <born_session>
-     projects '"<full-array>"'`. Informational only, never validated.
-   - **schema init (adopt/fork delegate)** → `manifest.py create
-     <born_session> --name <name> [--focus <text>]
-     [--spawned-from <parent> --spawned-from-session <parent-born>]`
+   - **projects[] — union/add** → `manifest.py set <born_session> projects '"<full-array>"'`. Informational only, never validated.
+   - **schema init (adopt/fork delegate)** → `manifest.py create <born_session> --name <name> [--focus <text>] [--spawned-from <parent> --spawned-from-session <parent-born>]`
      — the core script writes the full canonical-empty shape (no
      `parents` key, `direct_report: null`, `collaborate: []`,
      `refocused: []`, `previous_names: []`, `projects: []`,
@@ -128,10 +106,7 @@ project/spine node.
      already exists — never call this on an existing `born_session`.
      Used by `workstream:adopt` and `workstream:fork`.
    - **absorb-close (the ONE sanctioned cross-manifest write)** →
-     `manifest.py absorb-close <stale_born_session> --by-name
-     <overtaker-name> --by-session <overtaker-born-session>
-     [--vault-lock .vault-meta/bin/vault-lock.sh --lock-session
-     <this-session-id>]` — sets `state: absorbed` +
+     `manifest.py absorb-close <stale_born_session> --by-name <overtaker-name> --by-session <overtaker-born-session> [--vault-lock .vault-meta/bin/vault-lock.sh --lock-session <this-session-id>]` — sets `state: absorbed` +
      `absorbed_by`/`absorbed_by_session` on the STALE manifest,
      vault-lock-wrapped when the lock path is given, degrading to an
      unlocked write + stderr warning otherwise. This is
@@ -139,8 +114,7 @@ project/spine node.
      the only route in this whole plugin that touches a manifest other
      than the caller's own.
 
-5. **Regenerate the fleet views** after any write: `python3
-   scripts/views.py regen`.
+5. **Regenerate the fleet views** after any write: `python3 scripts/views.py regen`.
 
 6. **Confirm** in one line: which field changed, old → new, and any
    reciprocity notify performed.

@@ -39,8 +39,7 @@ declared here the same way for visibility).
 ## What a skill (the second builder's job) must do with these
 
 - `adopt` (and `fork`, which also mints a manifest): call
-  `workstream_lib.adopt_precheck()` FIRST, before any write; on `(False,
-  message)` print `message` and stop - never mint a manifest without
+  `workstream_lib.adopt_precheck()` FIRST, before any write; on `(False, message)` print `message` and stop - never mint a manifest without
   Ballast able to keep it current.
 - `boot.py`/`remind.py` already call `vault_lock_available()` themselves
   (see `scripts/boot.py`) - no skill action needed for that degrade.

@@ -8,9 +8,7 @@ persona-less plugin (04-workstreams-plugin.md and its component pages,
 
 This repo ships the **core**: identity primitives, lifecycle-writing
 primitives, the boot/remind/precompact hooks, the fleet-views generator,
-and the Ballast wiring. The 12 verb skills (`adopt · fork · refocus ·
-close · absorb · notify · list · graph · connect · manifest · policy ·
-sidecar`) are a separate build against the contract this repo exposes -
+and the Ballast wiring. The 12 verb skills (`adopt · fork · refocus · close · absorb · notify · list · graph · connect · manifest · policy · sidecar`) are a separate build against the contract this repo exposes -
 see `docs/dependencies.md` and each script's own module docstring.
 
 ## What
@@ -88,10 +86,8 @@ are a **Ballast scope** (B1-B5). Because this plugin owns *many* scopes -
 one per bound workstream directory, resolved at runtime from the
 session's own sidecar, not one static scope per plugin - it cannot use
 Ballast's static per-plugin hook template as-is (Ballast's own docs call
-this case out: `docs/consumer-hooks.json.snippet`). `scripts/ballast-
-dispatch.py` is the small wrapper that resolves the bound scope first,
-then execs the byte-identical `shim/ballast-shim.py` with `--scope
-<ws_dir>/ballast.json` (auto-created from the documented default scope on
+this case out: `docs/consumer-hooks.json.snippet`). `scripts/ballast- dispatch.py` is the small wrapper that resolves the bound scope first,
+then execs the byte-identical `shim/ballast-shim.py` with `--scope <ws_dir>/ballast.json` (auto-created from the documented default scope on
 first use, never overwritten after). Unbound sessions are a near-zero-
 cost no-op - no ballast invocation at all.
 

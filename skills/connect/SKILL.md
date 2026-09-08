@@ -75,8 +75,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
        legacy `parents`/`parent`/`parent_session`/`rebound` from an
        active manifest as part of that same write (the migration
        self-heal path). When Inv 5 is the ONLY flag and no other field
-       needs changing (the "default neither" case — `direct_report:
-       null`, `collaborate: []` already correct), the proposed fix is
+       needs changing (the "default neither" case — `direct_report: null`, `collaborate: []` already correct), the proposed fix is
        a **standalone strip trigger**: `workstream:manifest`
        "direct_report — clear" (writes `null`, the value it already
        holds — changes no relationship, just fires the write path that
@@ -113,8 +112,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
      it into a decision. Apply the answer through the same routes. Do
      not guess.
 
-4. **Regenerate the derived views** (invariant 8, always): `python3
-   scripts/views.py regen`.
+4. **Regenerate the derived views** (invariant 8, always): `python3 scripts/views.py regen`.
 
 5. **Report the reconciliation.** One compact section: each
    invariant's status (pass/flagged/fixed), what was flagged, what was

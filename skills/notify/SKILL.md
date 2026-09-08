@@ -1,6 +1,6 @@
 ---
 name: notify
-description: Hand a message to another workstream session — resolve the target ws-<name> (or legacy cos:<name>) session via list_sessions, take its MCP id, and send_message (arrives labelled "From <this title>", auto-processed by the receiver). Never gates on isRunning (unreliable). Trigger on "notify <workstream>", "message the <workstream> session", "tell <workstream> ...", "ping the other session". Do NOT use to adopt (workstream:adopt), roll-call (workstream:list), or reconcile forks (workstream:connect).
+description: Hand a message to another workstream session — resolve the target ws-NAME (or legacy cos:NAME) session via list_sessions, take its MCP id, and send_message (arrives labelled with the sending session's title, auto-processed by the receiver). Never gates on isRunning (unreliable). Trigger on "notify NAME", "message the NAME session", "tell NAME ...", "ping the other session". Do NOT use to adopt (workstream:adopt), roll-call (workstream:list), or reconcile forks (workstream:connect).
 ---
 
 # Workstream notify
@@ -35,8 +35,7 @@ if the `ccd_session_mgmt` MCP is unavailable (soft dependency, R3/R6 in
    reported `isRunning: false` (verified 2026-08-25). Attempt the send
    regardless and let `send_message` report a genuine failure.
 
-3. `mcp__ccd_session_mgmt__send_message(session_id=<target MCP id>,
-   message=<message>)`. Arrives in the target as a user turn labelled
+3. `mcp__ccd_session_mgmt__send_message(session_id=<target MCP id>, message=<message>)`. Arrives in the target as a user turn labelled
    "From `<this title>`" with a link back; the receiver auto-processes
    it. Cannot reach truly unattended sessions (scheduled-task/remote
    runs) — if refused for that reason, report it plainly.

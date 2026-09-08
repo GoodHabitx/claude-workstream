@@ -18,9 +18,7 @@ whose policy you're changing. Never touches a vault project/spine node.
 ## `/workstream:policy [natural-language change]`
 
 1. **Target = THIS session's bound workstream, always.** Resolve
-   exactly as `workstream:manifest` does: read the `<!--
-   workstream-session-id: ... -->` line, `python3 scripts/sidecar.py
-   resolve <session_id>` → `{born_session, ws_dir}`. Exit 1 → refuse,
+   exactly as `workstream:manifest` does: read the `<!-- workstream-session-id: ... -->` line, `python3 scripts/sidecar.py resolve <session_id>` → `{born_session, ws_dir}`. Exit 1 → refuse,
    point to `/workstream:adopt`. No cross-session target argument.
 
 2. **Single-writer, extended to `policy.md`.** Edits ONLY this

@@ -39,8 +39,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
      own hot state); if the overtaker is a different live session,
      `notify` it to perform the fold in its own session (never write
      into another workstream's `hot.md` directly); if closed,
-     `vault-lock acquire` its `hot.md` path (`--session
-     <this-session-id>`), write the merged block, `release`.
+     `vault-lock acquire` its `hot.md` path (`--session <this-session-id>`), write the merged block, `release`.
    - Append one absorption-record line to the overtaker's `log.md`
      (never to the stale one — provenance stays where it happened,
      AB6). Same single-writer choreography.
@@ -50,11 +49,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
      **never merged** — it stays as provenance, untouched.
 
 3. **Point — the determinism anchor (AB3).** `workstream:manifest`
-   ("absorbed[] — append", underlying: `python3 scripts/manifest.py
-   append-absorbed <overtaker-born-session> --name <stale-name>
-   --absorbed-born-session <stale-born-session> --dir
-   <stale-ws-dir-path> [--transcript <stale-transcript-path-if-still-
-   on-disk>]`) — a direct write on the overtaker's OWN manifest field.
+   ("absorbed[] — append", underlying: `python3 scripts/manifest.py append-absorbed <overtaker-born-session> --name <stale-name> --absorbed-born-session <stale-born-session> --dir <stale-ws-dir-path> [--transcript <stale-transcript-path-if-still- on-disk>]`) — a direct write on the overtaker's OWN manifest field.
    Resolve the transcript path via the stale workstream's matching
    sidecar (`born_session` match) — **best-effort**: transcripts can
    vanish from disk (measured), so omit `--transcript` rather than
@@ -84,11 +79,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 
 5. **Close the stale manifest — as absorbed, not closed.** This is the
    ONE sanctioned cross-manifest write in the whole plugin:
-   `workstream:manifest` ("absorb-close" — underlying: `python3
-   scripts/manifest.py absorb-close <stale-born-session> --by-name
-   <overtaker-name> --by-session <overtaker-born-session>
-   [--vault-lock .vault-meta/bin/vault-lock.sh --lock-session
-   <this-session-id>]`). Sets `state: absorbed` +
+   `workstream:manifest` ("absorb-close" — underlying: `python3 scripts/manifest.py absorb-close <stale-born-session> --by-name <overtaker-name> --by-session <overtaker-born-session> [--vault-lock .vault-meta/bin/vault-lock.sh --lock-session <this-session-id>]`). Sets `state: absorbed` +
    `absorbed_by`/`absorbed_by_session` together, vault-lock-wrapped
    when the lock is available, degrading to an unlocked write + stderr
    warning otherwise (never blocks on the lock's absence — AB1's

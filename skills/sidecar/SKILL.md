@@ -21,8 +21,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 
 ## `/workstream:sidecar [check|self-heal]`
 
-1. **Get this session's transcript id.** Read the `<!--
-   workstream-session-id: ... -->` line boot.py injected this session
+1. **Get this session's transcript id.** Read the `<!-- workstream-session-id: ... -->` line boot.py injected this session
    (echoed first, every SessionStart including compact — V1). If the
    line is missing entirely, boot.py itself didn't fire correctly — say
    so plainly and stop; this skill cannot recover an id boot never
@@ -42,8 +41,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 
 3. **`check <born_session>`** (when the caller already believes this
    session belongs to a specific workstream — e.g. a title reads
-   `ws-<name>` but boot reported unbound): `python3 scripts/sidecar.py
-   check <session_id> <born_session>` → prints `match` / `missing` /
+   `ws-<name>` but boot reported unbound): `python3 scripts/sidecar.py check <session_id> <born_session>` → prints `match` / `missing` /
    `mismatch`, exit 0 always. Report the verdict plainly:
    - `match` — sidecar already correct, nothing to do.
    - `missing` — no sidecar exists; offer `self-heal` below.
@@ -58,9 +56,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
    step 2/3 established this session really should point at
    `<born_session>` (its title reads `ws-<name>`, or the caller just
    confirmed a mismatch): read that manifest's `name`/`focus` first
-   (`python3 scripts/manifest.py read <born_session>`), then `python3
-   scripts/sidecar.py self-heal <session_id> <born_session> --name
-   <name> --focus <focus>` — writes the sidecar and prints a loud
+   (`python3 scripts/manifest.py read <born_session>`), then `python3 scripts/sidecar.py self-heal <session_id> <born_session> --name <name> --focus <focus>` — writes the sidecar and prints a loud
    one-line confirmation. This never mints a new manifest and never
    touches `workstream.json` — it only repairs the transcript-id →
    born_session pointer. If no manifest exists at `<born_session>` at
@@ -70,8 +66,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 5. **Write** (the lower-level primitive underneath `self-heal`, used
    directly only by another skill's own composite flow — e.g.
    `workstream:fork`'s birth, `workstream:adopt`'s schema-init delegate
-   path): `python3 scripts/sidecar.py write <session_id> <born_session>
-   [--name <name>] [--focus <focus>] [--dry-run]`. Prefer `self-heal`
+   path): `python3 scripts/sidecar.py write <session_id> <born_session> [--name <name>] [--focus <focus>] [--dry-run]`. Prefer `self-heal`
    for a direct caller-facing repair; `write` is the primitive other
    skills compose with.
 

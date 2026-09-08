@@ -29,16 +29,12 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
    for reconciliation from elsewhere.
 
 3. **Idempotency first — key on the stable sidebar uuid, not the
-   transcript id.** Get this session's own bare uuid (the `<!--
-   workstream-session-id: ... -->` line's value works for a
-   root/fork session — it IS the sidebar uuid here). `python3
-   scripts/manifest.py read <this-session-id>` (exit 0 = already
+   transcript id.** Get this session's own bare uuid (the `<!-- workstream-session-id: ... -->` line's value works for a
+   root/fork session — it IS the sidebar uuid here). `python3 scripts/manifest.py read <this-session-id>` (exit 0 = already
    birthed by a prior, possibly partial, run):
    - **Exists** → do NOT re-mint or re-ask Q2. **Resume the binding**:
-     `python3 scripts/sidecar.py self-heal <session_id>
-     <this-session-id> --name <name> --focus <focus>` (values from the
-     existing manifest) if `python3 scripts/sidecar.py check
-     <session_id> <this-session-id>` reports `missing`; re-apply the
+     `python3 scripts/sidecar.py self-heal <session_id> <this-session-id> --name <name> --focus <focus>` (values from the
+     existing manifest) if `python3 scripts/sidecar.py check <session_id> <this-session-id>` reports `missing`; re-apply the
      title `ws-<name>`. **Re-run step 8's parent notify** (reconstruct
      from the resumed manifest's `spawned_from` + any `direct_report`/
      `collaborate`) — a birth run can crash between sidecar-write and
@@ -48,8 +44,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
      re-asking is the safe recovery. Then STOP; skip minting.
    - **Doesn't exist** → proceed.
 
-4. **Recover the parent from the base title.** Strip one trailing `
-   (fork)`. If the base title still ends `(fork)`, the parent is
+4. **Recover the parent from the base title.** Strip one trailing ` (fork)`. If the base title still ends `(fork)`, the parent is
    itself an unreconciled fork — tell the principal to reconcile the
    parent first, STOP. Otherwise strip a leading `ws-` to get the
    parent name. Scan the state root's manifests for that name — no
@@ -65,17 +60,13 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
    (scan manifests); on a collision, disambiguate with a variant (fork
    cannot refuse — the session is already forked).
 
-6. **Birth this session's OWN manifest.** `python3 scripts/manifest.py
-   create <this-session-id> --name <new-name> --focus "<mission>"
-   --spawned-from <parent-name> --spawned-from-session
-   <parent-born-session>` (read the parent's `born_session` from its
+6. **Birth this session's OWN manifest.** `python3 scripts/manifest.py create <this-session-id> --name <new-name> --focus "<mission>" --spawned-from <parent-name> --spawned-from-session <parent-born-session>` (read the parent's `born_session` from its
    own manifest first — a read, never a write). Writes the canonical-
    empty relationship fields (`direct_report: null`, `collaborate: []`,
    no `parents` key) automatically.
 
    **Then bind the session immediately — before step 7's relationship
-   writes.** `python3 scripts/sidecar.py write <session_id>
-   <this-session-id> --name <new-name> --focus "<mission>"`. This makes
+   writes.** `python3 scripts/sidecar.py write <session_id> <this-session-id> --name <new-name> --focus "<mission>"`. This makes
    step 7's `workstream:manifest` calls resolve normally (via the
    sidecar) instead of needing a delegate bypass.
 

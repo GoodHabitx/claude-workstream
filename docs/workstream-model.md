@@ -206,8 +206,7 @@ session half (written once, never edited by a rename). Four axes:
   report-target **stores nothing**; its inbound reports are DERIVED by
   scanning for manifests whose `direct_report.session` equals its
   `born_session`.
-- **`collaborate: [{"name": <name>, "session": <born_session-uuid>,
-  "scope": <freeform>}, ...]` — COLLABORATION.** A **list**: bidirectional
+- **`collaborate: [{"name": <name>, "session": <born_session-uuid>, "scope": <freeform>}, ...]` — COLLABORATION.** A **list**: bidirectional
   peer coordination, carrying **no authority**. Declaring a collaboration
   **obliges reciprocity** — the declaring side messages the counterpart,
   and the counterpart writes its own mirror entry in its OWN manifest
@@ -512,8 +511,7 @@ open-ended detection. Implemented once, shared, in
    `parent_session`/`rebound` field (frozen closed/absorbed manifests are
    exempt).
 6. **Self-heal** (renamed from cos 0.20.0's Inv-6): every live session's
-   sidecar ↔ a real manifest, MECHANICALLY fixed via `sidecar.py
-   self-heal`, not just flagged.
+   sidecar ↔ a real manifest, MECHANICALLY fixed via `sidecar.py self-heal`, not just flagged.
 7. Unreconciled forks (title ends `(fork)`, no manifest) → notify to run
    `fork`, never self-birth.
 8. Derived views (`index.md`/`workstream-graph.md`) not stale — moot by
