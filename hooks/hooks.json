@@ -15,7 +15,43 @@
           {
             "type": "command",
             "timeout": 10,
-            "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/ballast-dispatch.py\" SessionStart \"${CLAUDE_PLUGIN_ROOT}\"; fi; done; exit 0"
+            "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/ballast-dispatch.py\" SessionStart \"${CLAUDE_PLUGIN_ROOT}\" --part hot; fi; done; exit 0"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/ballast-dispatch.py\" SessionStart \"${CLAUDE_PLUGIN_ROOT}\" --part policy; fi; done; exit 0"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/ballast-dispatch.py\" SessionStart \"${CLAUDE_PLUGIN_ROOT}\" --part glossary; fi; done; exit 0"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/ballast-dispatch.py\" SessionStart \"${CLAUDE_PLUGIN_ROOT}\" --part playbook; fi; done; exit 0"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/ballast-dispatch.py\" SessionStart \"${CLAUDE_PLUGIN_ROOT}\" --part policy --scope-kind global; fi; done; exit 0"
           }
         ]
       }
@@ -36,6 +72,18 @@
             "type": "command",
             "timeout": 10,
             "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/remind.py\" \"${CLAUDE_PLUGIN_ROOT}\"; fi; done; exit 0"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/ballast-dispatch.py\" PreToolUse \"${CLAUDE_PLUGIN_ROOT}\"; fi; done; exit 0"
           }
         ]
       }

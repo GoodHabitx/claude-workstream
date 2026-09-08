@@ -34,6 +34,20 @@ sys.stdout.write("FAKE-SHIM-CALLED event=%s argv=%r\\n" % (sys.argv[1], sys.argv
 sys.stdout.write("stdin-bytes=%d\\n" % len(sys.stdin.buffer.read()))
 """
 
+# Stands in for ballast's PreToolUse approval refusal: the hook protocol's
+# exit 2 with the reason on stderr. The wrapper must return this code
+# VERBATIM - a wrapper that copies the output and then returns 0 turns
+# every refusal into an allow.
+FAKE_SHIM_REFUSES = """#!/usr/bin/env python3
+import sys
+sys.stdin.buffer.read()
+sys.stderr.write("FAKE-BALLAST-REFUSAL: no fresh approval\\n")
+sys.exit(2)
+"""
+
+EVERY_EVENT = ("SessionStart", "UserPromptSubmit", "PreToolUse",
+               "PostToolUse", "PreCompact", "Stop")
+
 
 def make_vault():
     d = tempfile.mkdtemp(prefix="ws_ballast_dispatch_test_")
@@ -41,8 +55,8 @@ def make_vault():
     return d
 
 
-def run_dispatch(vault, event, plugin_root, payload_text):
-    return subprocess.run([sys.executable, DISPATCH, event, plugin_root],
+def run_dispatch(vault, event, plugin_root, payload_text, extra=()):
+    return subprocess.run([sys.executable, DISPATCH, event, plugin_root] + list(extra),
                           cwd=vault, input=payload_text, capture_output=True, text=True)
 
 
@@ -108,6 +122,243 @@ class BallastDispatchFakeShimTests(unittest.TestCase):
         with open(scope_path) as f:
             scope_after = json.load(f)
         self.assertEqual(scope_after["hot_cap_bytes"], 999)
+
+
+class BallastDispatchPartTests(unittest.TestCase):
+    """B1: the SessionStart split. Each `--part` rides its own hook command
+    so it claims its own inline envelope; the wrapper's only job is to
+    forward the flag untouched."""
+
+    def setUp(self):
+        self.vault = make_vault()
+        self.fake_root = tempfile.mkdtemp(prefix="ws_fake_plugin_root_")
+        os.makedirs(os.path.join(self.fake_root, "shim"))
+        with open(os.path.join(self.fake_root, "shim", "ballast-shim.py"), "w") as f:
+            f.write(FAKE_SHIM)
+        mprim.create_manifest(self.vault, "born-p", "wsp", "f")
+        sidecar.write(self.vault, "sess-p", "born-p")
+
+    def tearDown(self):
+        shutil.rmtree(self.vault, ignore_errors=True)
+        shutil.rmtree(self.fake_root, ignore_errors=True)
+
+    def test_part_is_forwarded_verbatim(self):
+        for part in ("hot", "policy", "glossary", "playbook"):
+            proc = run_dispatch(self.vault, "SessionStart", self.fake_root,
+                                json.dumps({"session_id": "sess-p"}),
+                                extra=("--part", part))
+            self.assertIn("'--part'", proc.stdout, part)
+            self.assertIn("'%s'" % part, proc.stdout, part)
+
+    def test_no_part_flag_forwards_no_part(self):
+        proc = run_dispatch(self.vault, "SessionStart", self.fake_root,
+                            json.dumps({"session_id": "sess-p"}))
+        self.assertIn("FAKE-SHIM-CALLED", proc.stdout)
+        self.assertNotIn("--part", proc.stdout)
+
+    def test_plugin_root_positional_still_works_with_flags(self):
+        """The flags may follow the two positionals an un-updated hook line
+        already passes; the plugin root must still resolve from argv."""
+        proc = run_dispatch(self.vault, "SessionStart", self.fake_root,
+                            json.dumps({"session_id": "sess-p"}),
+                            extra=("--part", "hot"))
+        self.assertIn("ballast-shim.py", proc.stdout)
+
+
+class BallastDispatchGlobalScopeTests(unittest.TestCase):
+    """B1: the global delivery. `<state-root>/_global/ballast.json` is
+    seeded by an operator; until it is, the delivery is silent - not an
+    error, and never auto-created here."""
+
+    def setUp(self):
+        self.vault = make_vault()
+        self.fake_root = tempfile.mkdtemp(prefix="ws_fake_plugin_root_")
+        os.makedirs(os.path.join(self.fake_root, "shim"))
+        with open(os.path.join(self.fake_root, "shim", "ballast-shim.py"), "w") as f:
+            f.write(FAKE_SHIM)
+        mprim.create_manifest(self.vault, "born-g", "wsg", "f")
+        sidecar.write(self.vault, "sess-g", "born-g")
+        self.global_dir = os.path.join(wslib.state_root(self.vault), "_global")
+
+    def tearDown(self):
+        shutil.rmtree(self.vault, ignore_errors=True)
+        shutil.rmtree(self.fake_root, ignore_errors=True)
+
+    def _run(self, session_id="sess-g"):
+        return run_dispatch(self.vault, "SessionStart", self.fake_root,
+                            json.dumps({"session_id": session_id}),
+                            extra=("--part", "policy", "--scope-kind", "global"))
+
+    def test_skips_silently_when_global_dir_is_absent(self):
+        self.assertFalse(os.path.isdir(self.global_dir))
+        proc = self._run()
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(proc.stdout, "")
+        self.assertEqual(proc.stderr, "")
+
+    def test_never_creates_the_global_scope(self):
+        self._run()
+        self.assertFalse(os.path.exists(self.global_dir))
+
+    def test_skips_silently_for_an_unbound_session(self):
+        os.makedirs(self.global_dir)
+        wslib.atomic_write_lf(os.path.join(self.global_dir, "ballast.json"), "{}\n")
+        proc = self._run(session_id="sess-not-bound")
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(proc.stdout, "")
+
+    def test_forwards_the_global_scope_when_it_exists(self):
+        os.makedirs(self.global_dir)
+        wslib.atomic_write_lf(os.path.join(self.global_dir, "ballast.json"), "{}\n")
+        proc = self._run()
+        self.assertIn("FAKE-SHIM-CALLED event=SessionStart", proc.stdout)
+        self.assertIn("_global", proc.stdout)
+        # ...and the session's OWN workstream scope is not what was passed.
+        self.assertNotIn("born-g", proc.stdout)
+
+
+class BallastDispatchExitCodeTests(unittest.TestCase):
+    """The highest-risk surface in the wrapper: swallowing the shim's exit
+    2 would leave a gate that looks wired and enforces nothing."""
+
+    def setUp(self):
+        self.vault = make_vault()
+        self.fake_root = tempfile.mkdtemp(prefix="ws_fake_plugin_root_")
+        os.makedirs(os.path.join(self.fake_root, "shim"))
+        with open(os.path.join(self.fake_root, "shim", "ballast-shim.py"), "w") as f:
+            f.write(FAKE_SHIM_REFUSES)
+        mprim.create_manifest(self.vault, "born-x", "wsx", "f")
+        sidecar.write(self.vault, "sess-x", "born-x")
+
+    def tearDown(self):
+        shutil.rmtree(self.vault, ignore_errors=True)
+        shutil.rmtree(self.fake_root, ignore_errors=True)
+
+    def test_refusal_exit_code_propagates_verbatim(self):
+        proc = run_dispatch(self.vault, "PreToolUse", self.fake_root,
+                            json.dumps({"session_id": "sess-x",
+                                        "tool_name": "Write",
+                                        "tool_input": {"file_path": "notes.md"}}))
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("FAKE-BALLAST-REFUSAL", proc.stderr)
+
+
+class BallastDispatchManifestGuardTests(unittest.TestCase):
+    """B1: the wrapper's own refusal - a direct Write/Edit/NotebookEdit of a
+    workstream.json under the state root. Manifests go through
+    scripts/manifest.py, which is not a Write tool call, so the primitive
+    itself is never caught by this."""
+
+    def setUp(self):
+        self.vault = make_vault()
+        self.fake_root = tempfile.mkdtemp(prefix="ws_fake_plugin_root_")
+        os.makedirs(os.path.join(self.fake_root, "shim"))
+        with open(os.path.join(self.fake_root, "shim", "ballast-shim.py"), "w") as f:
+            f.write(FAKE_SHIM)
+        mprim.create_manifest(self.vault, "born-m", "wsm", "f")
+        sidecar.write(self.vault, "sess-m", "born-m")
+        self.manifest = wslib.manifest_path_for(self.vault, "born-m")
+
+    def tearDown(self):
+        shutil.rmtree(self.vault, ignore_errors=True)
+        shutil.rmtree(self.fake_root, ignore_errors=True)
+
+    def _pre_tool_use(self, payload):
+        return run_dispatch(self.vault, "PreToolUse", self.fake_root,
+                            json.dumps(payload))
+
+    def test_write_to_a_manifest_is_refused(self):
+        proc = self._pre_tool_use({"session_id": "sess-m", "tool_name": "Write",
+                                   "tool_input": {"file_path": self.manifest}})
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("may not be written", proc.stderr)
+        self.assertIn("manifest.py", proc.stderr)
+        self.assertEqual(proc.stdout, "")
+
+    def test_every_write_tool_is_covered(self):
+        for tool, key in (("Write", "file_path"), ("Edit", "file_path"),
+                          ("NotebookEdit", "notebook_path")):
+            proc = self._pre_tool_use({"session_id": "sess-m", "tool_name": tool,
+                                       "tool_input": {key: self.manifest}})
+            self.assertEqual(proc.returncode, 2, tool)
+
+    def test_refused_even_when_the_session_is_unbound(self):
+        """The guard protects the manifest tree, not this session's own
+        identity - an unbound session writing someone else's manifest is
+        exactly the case worth catching."""
+        proc = self._pre_tool_use({"session_id": "sess-unbound",
+                                   "tool_name": "Write",
+                                   "tool_input": {"file_path": self.manifest}})
+        self.assertEqual(proc.returncode, 2)
+
+    def test_a_relative_path_resolves_against_the_payload_cwd(self):
+        rel = os.path.relpath(self.manifest, self.vault)
+        proc = self._pre_tool_use({"session_id": "sess-m", "tool_name": "Write",
+                                   "cwd": self.vault,
+                                   "tool_input": {"file_path": rel}})
+        self.assertEqual(proc.returncode, 2)
+
+    def test_refused_through_a_second_spelling_of_the_same_root(self):
+        """The consuming vault is reachable under two roots (one a symlink
+        to the other), so the guard canonicalizes both sides - a raw string
+        comparison would let a write arriving through the other spelling
+        walk straight past it."""
+        link = os.path.join(tempfile.mkdtemp(prefix="ws_link_"), "vault-alias")
+        try:
+            os.symlink(self.vault, link, target_is_directory=True)
+        except (OSError, NotImplementedError, AttributeError) as exc:
+            self.skipTest("symlinks unavailable on this host: %r" % exc)
+        aliased = os.path.join(link, os.path.relpath(self.manifest, self.vault))
+        proc = self._pre_tool_use({"session_id": "sess-m", "tool_name": "Write",
+                                   "tool_input": {"file_path": aliased}})
+        self.assertEqual(proc.returncode, 2)
+
+    def test_a_workstream_json_outside_the_state_root_passes(self):
+        outside = os.path.join(self.vault, "somewhere", "workstream.json")
+        os.makedirs(os.path.dirname(outside))
+        proc = self._pre_tool_use({"session_id": "sess-m", "tool_name": "Write",
+                                   "tool_input": {"file_path": outside}})
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("FAKE-SHIM-CALLED", proc.stdout)   # forwarded, not refused
+
+    def test_a_bash_command_naming_the_manifest_is_not_a_write_tool(self):
+        proc = self._pre_tool_use({"session_id": "sess-m", "tool_name": "Bash",
+                                   "tool_input": {"command": "cat " + self.manifest}})
+        self.assertEqual(proc.returncode, 0)
+
+    def test_an_ordinary_write_is_forwarded_to_the_shim(self):
+        proc = self._pre_tool_use({"session_id": "sess-m", "tool_name": "Write",
+                                   "tool_input": {"file_path":
+                                                  os.path.join(self.vault, "n.md")}})
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("FAKE-SHIM-CALLED event=PreToolUse", proc.stdout)
+
+
+class BallastDispatchUnboundTests(unittest.TestCase):
+    def setUp(self):
+        self.vault = make_vault()
+        self.fake_root = tempfile.mkdtemp(prefix="ws_fake_plugin_root_")
+        os.makedirs(os.path.join(self.fake_root, "shim"))
+        with open(os.path.join(self.fake_root, "shim", "ballast-shim.py"), "w") as f:
+            f.write(FAKE_SHIM)
+
+    def tearDown(self):
+        shutil.rmtree(self.vault, ignore_errors=True)
+        shutil.rmtree(self.fake_root, ignore_errors=True)
+
+    def test_no_output_and_exit_zero_on_every_event(self):
+        for event in EVERY_EVENT:
+            proc = run_dispatch(self.vault, event, self.fake_root,
+                                json.dumps({"session_id": "sess-unbound"}))
+            self.assertEqual(proc.returncode, 0, event)
+            self.assertEqual(proc.stdout, "", event)
+            self.assertEqual(proc.stderr, "", event)
+
+    def test_no_output_when_stdin_carries_no_session_id(self):
+        for event in EVERY_EVENT:
+            proc = run_dispatch(self.vault, event, self.fake_root, "{}")
+            self.assertEqual(proc.returncode, 0, event)
+            self.assertEqual(proc.stdout, "", event)
 
 
 class BallastDispatchRealShimFailOpenTests(unittest.TestCase):
