@@ -129,11 +129,29 @@ def render_identity_block(vault, born_session, ws_dir, root=None):
     alone, loud about what's wrong (X3: never a silent drop)."""
     manifest, err = wslib.read_manifest(vault, born_session, root)
     if manifest is None:
-        return ("## Workstream identity (%s) - workstream.json is %s. "
-                "This session is bound to a dir with no usable manifest - "
-                "re-run the adopt/fork verb to self-heal, or investigate "
-                "the file directly."
-                % (_rel(vault, ws_dir), err or "missing"))
+        if err:
+            # Present-but-broken (malformed/oversized/unreadable/not an
+            # object): flag once here at SessionStart, and name the
+            # content-preserving repair path so a reply can run it.
+            # `manifest.py repair` moves the unusable file aside to a
+            # timestamped `.corrupt-<ts>` backup (the old content is kept
+            # there, never deleted) and then writes a fresh canonical
+            # manifest through the schema. `set` and the direct-write guard
+            # both refuse a broken manifest, so repair is the only route.
+            return ("## Workstream identity (%s) - workstream.json is %s. "
+                    "This session is bound to a dir with no usable manifest - "
+                    "reply to have it repaired: `manifest.py repair %s --name "
+                    "NAME` moves the unusable file aside to a `.corrupt-<ts>` "
+                    "backup (your content is preserved there) and writes a "
+                    "fresh canonical manifest."
+                    % (_rel(vault, ws_dir), err, born_session))
+        # Genuinely absent (not broken): repair has no file to move aside,
+        # so the self-heal route is re-running the adopt/fork verb.
+        return ("## Workstream identity (%s) - workstream.json is missing. "
+                "This session is bound to a dir with no manifest - re-run the "
+                "adopt/fork verb to self-heal (repair needs an existing file "
+                "to move aside)."
+                % _rel(vault, ws_dir))
 
     ws_root = os.path.dirname(ws_dir)
     manifests, _orphans = wslib.discover_manifests(ws_root)

@@ -141,7 +141,10 @@ class BootCraftedStdinTests(unittest.TestCase):
         self.assertIn("nobody - a root", proc.stdout)
         self.assertNotIn("no sidecar for", proc.stdout)
 
-    # 9. bound, malformed manifest.json
+    # 9. bound, malformed manifest.json -> the present-but-broken branch:
+    # flagged once at SessionStart, naming the content-preserving repair
+    # path (manifest.py repair, which moves the bad file aside to a
+    # .corrupt-<ts> backup and rewrites the canonical shape).
     def test_bound_malformed_manifest_degrades_loudly(self):
         ws_dir = os.path.join(wslib.state_root(self.vault), "born-5")
         os.makedirs(ws_dir)
@@ -152,6 +155,24 @@ class BootCraftedStdinTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0)
         self.assertIn("Workstream identity", proc.stdout)
         self.assertIn("malformed", proc.stdout)
+        # names the repair path + the born_session it takes, and says the
+        # old content is preserved (the .corrupt-<ts> backup)
+        self.assertIn("manifest.py repair born-5", proc.stdout)
+        self.assertIn("preserved", proc.stdout)
+
+    # 9b. bound to a dir that exists but has NO manifest at all -> the
+    # missing branch: repair has no file to move aside, so it points at
+    # adopt/fork self-heal and does NOT name manifest.py repair.
+    def test_bound_missing_manifest_points_at_adopt_fork(self):
+        ws_dir = os.path.join(wslib.state_root(self.vault), "born-5b")
+        os.makedirs(ws_dir)
+        sidecar.write(self.vault, "sess-5b", "born-5b")
+        proc = run_boot(self.vault, json.dumps({"session_id": "sess-5b"}))
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("Workstream identity", proc.stdout)
+        self.assertIn("missing", proc.stdout)
+        self.assertIn("adopt/fork", proc.stdout)
+        self.assertNotIn("manifest.py repair", proc.stdout)
 
     # 10. bound, vault-lock absent -> warning NOTE
     def test_bound_vault_lock_absent_warns(self):
