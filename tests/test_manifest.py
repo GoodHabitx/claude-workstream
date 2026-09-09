@@ -3,6 +3,7 @@
 plus the one sanctioned cross-manifest write, absorb_close (AB1-AB7)."""
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -11,6 +12,8 @@ import tempfile
 import unittest
 
 SCRIPTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+SKILL_MD = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
+                        "skills", "manifest", "SKILL.md")
 sys.path.insert(0, SCRIPTS)
 import workstream_lib as wslib
 import manifest as mprim
@@ -20,6 +23,36 @@ def make_vault():
     d = tempfile.mkdtemp(prefix="ws_manifest_test_")
     os.makedirs(os.path.join(d, "staff"), exist_ok=True)
     return d
+
+
+# --- the skill's own documented commands (see DocumentedSkillCommandTests) --
+DOCUMENTED_SET_RE = re.compile(
+    r"manifest\.py set <born_session> ([A-Za-z_]+) "
+    r"(?:'(?P<quoted>[^']*)'|(?P<bare>null))")
+PLACEHOLDER_RE = re.compile(r"<([a-zA-Z0-9_-]+)>")
+# The one placeholder whose own text is not itself a legal value.
+PLACEHOLDER_VALUES = {"state": "active"}
+
+
+def documented_set_commands():
+    """[(field, value-as-written), ...] for every `manifest.py set` command
+    in skills/manifest/SKILL.md - read from the shipped file, never restated
+    here, so the test exercises the text a person would copy."""
+    with open(SKILL_MD, encoding="utf-8") as handle:
+        text = handle.read()
+    out = []
+    for match in DOCUMENTED_SET_RE.finditer(text):
+        value = match.group("quoted")
+        out.append((match.group(1), match.group("bare") if value is None else value))
+    return out
+
+
+def concretize(value):
+    """The documented value with each angle-bracket placeholder replaced by
+    a literal of the same shape - the substitution a person makes when they
+    run the command."""
+    return PLACEHOLDER_RE.sub(
+        lambda m: PLACEHOLDER_VALUES.get(m.group(1), m.group(1)), value)
 
 
 # A stand-in for ballast's scripts/approve.py, implementing exactly the
@@ -577,6 +610,52 @@ class ManifestCLIGateTests(GatedTestCase):
     def test_cli_writes_an_ungated_field_with_no_token(self):
         proc = self._run("set", "born-cli", "last_touched", json.dumps("2026-09-08T00:00:00Z"))
         self.assertEqual(proc.returncode, 0, proc.stderr)
+
+
+class DocumentedSkillCommandTests(unittest.TestCase):
+    """The `manifest.py set` command strings /workstream:manifest documents,
+    run EXACTLY as written against a fixture manifest with the gate
+    disarmed - so what is under test is the shape check, i.e. whether the
+    sanctioned path in the skill actually works when someone follows it.
+
+    Prose review alone missed that five of them wrapped a non-string JSON
+    value in an extra literal quote pair (`'"[...]"'`), which json.loads
+    turns into a STRING and the shape check rejects every time."""
+
+    EXPECTED_FIELDS = {"focus", "direct_report", "refocused", "name",
+                       "previous_names", "state", "absorbed_by",
+                       "absorbed_by_session", "maintains", "projects"}
+
+    def setUp(self):
+        self.vault = make_vault()
+        mprim.create_manifest(self.vault, "ws1", "ws1", "f")
+        open(os.path.join(wslib.state_root(self.vault),
+                          "ballast-gate.disabled"), "w").close()
+
+    def tearDown(self):
+        shutil.rmtree(self.vault, ignore_errors=True)
+
+    def test_every_field_the_skill_documents_is_exercised(self):
+        """Guards the extraction itself: a command that stops matching would
+        otherwise silently drop out of the run below."""
+        self.assertEqual({field for field, _ in documented_set_commands()},
+                         self.EXPECTED_FIELDS)
+
+    def test_each_documented_value_is_valid_json(self):
+        for field, value in documented_set_commands():
+            with self.subTest(field=field):
+                json.loads(concretize(value))
+
+    def test_each_documented_command_is_accepted_by_the_primitive(self):
+        for field, value in documented_set_commands():
+            concrete = concretize(value)
+            with self.subTest(field=field, value=concrete):
+                proc = subprocess.run(
+                    [sys.executable, os.path.join(SCRIPTS, "manifest.py"),
+                     "set", "ws1", field, concrete],
+                    cwd=self.vault, capture_output=True, text=True)
+                self.assertNotIn("fails shape check", proc.stderr)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
 
 
 if __name__ == "__main__":

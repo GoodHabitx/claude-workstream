@@ -84,7 +84,7 @@ project/spine node.
      front-facing job, not this primitive's.
    - **direct_report — set (gated)** → resolve the target's `born_session` by
      reading ITS manifest (`manifest.py read <target-born-session>` — a
-     read, never a write), then `manifest.py set <born_session> direct_report '"{\"name\":\"<target-name>\",\"session\":\"<target-born-session>\"}"'`.
+     read, never a write), then `manifest.py set <born_session> direct_report '{"name":"<target-name>","session":"<target-born-session>"}'`.
      Refuse a self-report. Refuse (or warn loudly if the ask is
      explicit) a target whose `state` is `closed`/`absorbed` — that's
      an immediate connect invariant-3 violation; point at the target's
@@ -104,7 +104,7 @@ project/spine node.
      later. Never hard-fail the op on a notify failure.
    - **collaborate — remove (gated)** → `manifest.py collaborate-remove <born_session> --peer-session <peer-born-session>`. Reciprocity-
      remove the mirror the same way (notify live / vault-lock closed).
-   - **refocused — append** → `manifest.py set <born_session> refocused '"<full-array-with-new-entry-appended>"'` (read current, append
+   - **refocused — append** → `manifest.py set <born_session> refocused '[{"date":"<iso-date>","from_focus":"<old>","to_focus":"<new>","note":"<why>"}]'` — the WHOLE array (read current, append
      `{date, from_focus, to_focus, note}`, write back — append-only,
      never edit/trim an existing entry). Called by `workstream:refocus`.
    - **name / previous_names** → **redirect the caller to
@@ -112,7 +112,7 @@ project/spine node.
      `previous_names` only as refocus's *delegate*; a bare rename here
      would leave the session title + sidecar stale. If invoked as that
      delegate: `manifest.py set <born_session> name '"<new>"'` then
-     `manifest.py set <born_session> previous_names '"<array-with-old-name-appended>"'`.
+     `manifest.py set <born_session> previous_names '["<old-name>"]'` — the WHOLE array, with the old name appended.
    - **state — set** (`active|closed|absorbed`) → `manifest.py set <born_session> state '"<state>"'`. Normally the delegate of
      `workstream:close` (→ closed) or `workstream:absorb` (→ absorbed),
      which own the surrounding dependents-surfacing and re-home work
@@ -125,11 +125,11 @@ project/spine node.
      `manifest.py set <born_session> absorbed_by_session '"<successor-born-session>"'` — set together with `state: absorbed`. This is `workstream:absorb`'s delegate write.
    - **absorbed[] — append (gated)** → `manifest.py append-absorbed <born_session> --name <name> --absorbed-born-session <id> --dir <path> [--transcript <path>]`. This is `workstream:absorb`'s
      delegate write (AB3, the determinism anchor) — never hand-rolled.
-   - **maintains[] — add/remove (gated)** → `manifest.py set <born_session> maintains '"<full-array>"'` (read current, add/remove the
+   - **maintains[] — add/remove (gated)** → `manifest.py set <born_session> maintains '["<wikilink-or-abs-path>"]'` — the WHOLE array (read current, add/remove the
      wikilink or absolute path, write back). Lives in the manifest, not
      `policy.md` (I6) — `workstream:policy`'s `## Maintains` route is
      retired; this is the only place `maintains[]` is written.
-   - **projects[] — union/add** → `manifest.py set <born_session> projects '"<full-array>"'`. Informational only, never validated.
+   - **projects[] — union/add** → `manifest.py set <born_session> projects '["<project-a>","<project-b>"]'` — the WHOLE array. Informational only, never validated.
    - **schema init (adopt/fork delegate)** → `manifest.py create <born_session> --name <name> [--focus <text>] [--spawned-from <parent> --spawned-from-session <parent-born>]`
      — the core script writes the full canonical-empty shape (no
      `parents` key, `direct_report: null`, `collaborate: []`,
