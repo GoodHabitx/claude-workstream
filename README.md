@@ -134,7 +134,11 @@ the 0.1.1 default, and a customized scope is never overwritten). It
 forwards `--part` untouched, resolves `<state_root>/_global/ballast.json`
 under `--scope-kind global`, and returns the shim's exit code VERBATIM so
 a refusal stays a refusal. Unbound sessions are a near-zero-cost no-op -
-no ballast invocation at all. Full wiring: `docs/workstream-model.md`.
+no ballast invocation at all - on every event but `PreToolUse`, where a
+write TARGETING a path under `<state_root>/` is passed to the gate anyway,
+against a scope resolved from the target: the gate protects those files,
+not sessions, and unbound is most sessions. Full wiring:
+`docs/workstream-model.md`.
 
 ## Install
 

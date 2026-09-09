@@ -44,12 +44,21 @@ Write/Edit/NotebookEdit of a `workstream.json` under the state root
 (WORKSTREAM_MANIFEST_REFUSAL below). Manifests are schema-authoritative
 and single-writer; every field write goes through scripts/manifest.py.
 That check runs whether or not this session is bound - it protects the
-state root, not this session's own identity - and is the only thing an
-unbound session's dispatch can ever emit.
+state root, not this session's own identity.
 
 Unbound sessions (no sidecar, or born_session doesn't resolve to an
 existing dir - the common case for most sessions/most turns): near-zero-
-cost no-op, exit 0, no output, no ballast invocation at all.
+cost no-op, exit 0, no output, no ballast invocation at all - with ONE
+exception, PreToolUse. Ballast's approval gate protects FILES under the
+state root (policy.md, global-policy.md, playbook.md, glossary.md), not
+sessions, and this plugin is the only consumer that wires it: an unbound
+session skipping the gate would leave those four files guarded in name
+only against the very population the docstring above calls the common
+case. So on PreToolUse alone, when this session is unbound and the write
+TARGETS a path under the state root, the scope is resolved from that
+target instead of from the session (gate_scope_for below) and the forward
+happens anyway. Every other event, and every PreToolUse whose target is
+outside the state root, stays the silent no-op.
 
 Bound sessions: ensures a ballast.json exists in the workstream's own dir
 (writing the documented default scope - ballast 0.1.2's
@@ -244,6 +253,62 @@ def manifest_write_refused(payload, vault):
     return None
 
 
+def any_scope_under(root):
+    """The first existing `<state-root>/<dir>/ballast.json`, in sorted
+    directory order, or None.
+
+    Ballast's PreToolUse gate reads exactly two things from the scope it is
+    handed - the state root (the parent of the scope's own directory) and
+    `approval_ttl_seconds` - so for a gate check against a target under THIS
+    state root, every scope under it answers the same. Creates nothing: a
+    scope file is written for a BOUND session by ensure_scope, never by a
+    gate check."""
+    try:
+        with os.scandir(root) as entries:
+            names = sorted(e.name for e in entries if e.is_dir())
+    except OSError:
+        return None
+    for name in names:
+        candidate = os.path.join(root, name, "ballast.json")
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def gate_scope_for(payload, vault):
+    """The ballast.json Ballast's PreToolUse gate runs against when THIS
+    session is unbound - resolved from the WRITE TARGET rather than from the
+    session - or None when there is nothing here to gate.
+
+    Only a Write/Edit/NotebookEdit whose target lies under the state root
+    can reach a gated file, so everything else returns None and keeps the
+    unbound no-op intact. WHICH filenames are gated stays Ballast's call and
+    is deliberately not restated here; this resolves only which scope
+    answers the question.
+
+    Honest limit: with no ballast.json anywhere under the state root there
+    is no scope to answer with, so the write passes ungated. That state
+    ends at the first bound session's own SessionStart, which is what
+    writes one (ensure_scope)."""
+    tool = payload.get("tool_name")
+    if not isinstance(tool, str) or tool.strip().lower() not in WRITE_TOOL_NAMES:
+        return None
+    root = wslib.state_root(vault)
+    cwd = payload.get("cwd") or vault
+    targets = []
+    for raw_path in extract_paths(payload.get("tool_input")):
+        target = raw_path if os.path.isabs(raw_path) else os.path.join(cwd, raw_path)
+        if is_under(target, root):
+            targets.append(target)
+    if not targets:
+        return None
+    for target in targets:
+        beside = os.path.join(os.path.dirname(target), "ballast.json")
+        if os.path.isfile(beside):
+            return beside
+    return any_scope_under(root)
+
+
 def ensure_scope(ws_dir):
     """The workstream's own ballast.json: written from the documented
     default on first use, MIGRATED when it still holds the 0.1.1 default
@@ -302,6 +367,11 @@ def main(argv):
             return REFUSAL_EXIT
 
     scope_path = resolve_scope(vault, session_id, scope_kind)
+    if not scope_path and event == "PreToolUse" and scope_kind != "global":
+        # The gate binds FILES, not sessions (module docstring): an unbound
+        # session writing under the state root still passes through it,
+        # with the scope resolved from the target it is writing.
+        scope_path = gate_scope_for(payload, vault)
     if not scope_path:
         return 0   # unbound, or a global delivery with no _global/ seeded
 

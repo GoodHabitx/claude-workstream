@@ -501,7 +501,16 @@ makes both fail open), and not PreCompact (it re-injects at the
 compact-source SessionStart anyway).
 
 An unbound session is a near-zero-cost no-op on every one of these: one
-sidecar lookup, no output, exit 0, no Ballast invocation at all.
+sidecar lookup, no output, exit 0, no Ballast invocation at all — with
+one deliberate exception, `PreToolUse`. The approval gate protects the
+four FILES under the state root, not sessions, and unbound is most
+sessions most turns; a gate the majority of writers walk past is a
+declaration, not a mechanism. So when an unbound session's write targets
+a path under `<state_root>/`, the wrapper resolves a scope from that
+TARGET (the `ballast.json` beside it, else any scope under the same state
+root — the gate reads only the state root and the TTL from it) and
+forwards anyway, creating nothing. A write outside the state root, and
+every other event, stays the silent no-op.
 
 The manifest schema (target, this build):
 ```json

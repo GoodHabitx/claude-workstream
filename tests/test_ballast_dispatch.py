@@ -459,6 +459,122 @@ class BallastDispatchManifestGuardTests(unittest.TestCase):
         self.assertIn("FAKE-SHIM-CALLED event=PreToolUse", proc.stdout)
 
 
+class BallastDispatchUnboundGateTests(unittest.TestCase):
+    """The gate binds FILES under the state root, not sessions: an UNBOUND
+    session's write of one still reaches Ballast's PreToolUse gate, with the
+    scope resolved from the TARGET. Unbound is this plugin's own documented
+    common case, and this plugin is the only consumer wiring the gate, so a
+    gate that skipped unbound sessions would guard nothing in practice."""
+
+    def setUp(self):
+        self.vault = make_vault()
+        self.fake_root = tempfile.mkdtemp(prefix="ws_fake_plugin_root_")
+        os.makedirs(os.path.join(self.fake_root, "shim"))
+        self.shim = os.path.join(self.fake_root, "shim", "ballast-shim.py")
+        with open(self.shim, "w") as f:
+            f.write(FAKE_SHIM)
+        self.state_root = wslib.state_root(self.vault)
+        self.ws_dir = os.path.join(self.state_root, "born-u")
+        os.makedirs(self.ws_dir)
+        wslib.atomic_write_lf(os.path.join(self.ws_dir, "ballast.json"), "{}\n")
+        self.global_dir = os.path.join(self.state_root, "_global")
+
+    def tearDown(self):
+        shutil.rmtree(self.vault, ignore_errors=True)
+        shutil.rmtree(self.fake_root, ignore_errors=True)
+
+    def _write(self, path, event="PreToolUse", tool="Write", key="file_path",
+               session_id="sess-unbound"):
+        return run_dispatch(self.vault, event, self.fake_root,
+                            json.dumps({"session_id": session_id,
+                                        "tool_name": tool,
+                                        "tool_input": {key: path}}))
+
+    def test_an_unbound_write_under_the_state_root_reaches_the_gate(self):
+        proc = self._write(os.path.join(self.ws_dir, "policy.md"))
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("FAKE-SHIM-CALLED event=PreToolUse", proc.stdout)
+        self.assertIn(os.path.join(self.ws_dir, "ballast.json").replace("\\", "\\\\")
+                      if os.name == "nt"
+                      else os.path.join(self.ws_dir, "ballast.json"), proc.stdout)
+
+    def test_an_unbound_write_of_the_global_file_reaches_the_gate(self):
+        """`_global/` carries no ballast.json here, so the scope comes from
+        the fallback scan - the gate only needs the state root, which every
+        scope under it carries."""
+        os.makedirs(self.global_dir)
+        proc = self._write(os.path.join(self.global_dir, "global-policy.md"))
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("FAKE-SHIM-CALLED event=PreToolUse", proc.stdout)
+        self.assertIn("born-u", proc.stdout)
+
+    def test_the_global_scopes_own_ballast_json_is_preferred_when_present(self):
+        os.makedirs(self.global_dir)
+        wslib.atomic_write_lf(os.path.join(self.global_dir, "ballast.json"), "{}\n")
+        proc = self._write(os.path.join(self.global_dir, "global-policy.md"))
+        self.assertIn("_global", proc.stdout)
+        self.assertNotIn("born-u", proc.stdout)
+
+    def test_every_write_tool_reaches_the_gate(self):
+        for tool, key in (("Write", "file_path"), ("Edit", "file_path"),
+                          ("NotebookEdit", "notebook_path")):
+            proc = self._write(os.path.join(self.ws_dir, "policy.md"),
+                               tool=tool, key=key)
+            self.assertIn("FAKE-SHIM-CALLED", proc.stdout, tool)
+
+    def test_nothing_is_created_by_a_gate_check(self):
+        os.makedirs(self.global_dir)
+        self._write(os.path.join(self.global_dir, "global-policy.md"))
+        self._write(os.path.join(self.state_root, "born-new", "policy.md"))
+        self.assertFalse(os.path.isfile(os.path.join(self.global_dir, "ballast.json")))
+        self.assertFalse(os.path.exists(os.path.join(self.state_root, "born-new")))
+
+    def test_a_write_outside_the_state_root_is_still_a_silent_no_op(self):
+        proc = self._write(os.path.join(self.vault, "notes.md"))
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(proc.stdout, "")
+        self.assertEqual(proc.stderr, "")
+
+    def test_a_non_write_tool_is_still_a_silent_no_op(self):
+        proc = self._write(os.path.join(self.ws_dir, "policy.md"),
+                           tool="Bash", key="command")
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(proc.stdout, "")
+
+    def test_only_pre_tool_use_forwards_for_an_unbound_session(self):
+        for event in ("SessionStart", "UserPromptSubmit", "PostToolUse",
+                      "PreCompact", "Stop"):
+            proc = self._write(os.path.join(self.ws_dir, "policy.md"), event=event)
+            self.assertEqual(proc.returncode, 0, event)
+            self.assertEqual(proc.stdout, "", event)
+
+    def test_the_global_scope_kind_still_needs_a_bound_session(self):
+        proc = subprocess.run(
+            [sys.executable, DISPATCH, "PreToolUse", self.fake_root,
+             "--scope-kind", "global"],
+            cwd=self.vault, capture_output=True, text=True,
+            input=json.dumps({"session_id": "sess-unbound", "tool_name": "Write",
+                              "tool_input": {"file_path":
+                                             os.path.join(self.ws_dir, "policy.md")}}))
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(proc.stdout, "")
+
+    def test_no_scope_anywhere_under_the_root_is_a_silent_no_op(self):
+        os.unlink(os.path.join(self.ws_dir, "ballast.json"))
+        proc = self._write(os.path.join(self.ws_dir, "policy.md"))
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(proc.stdout, "")
+
+    def test_an_unbound_refusal_propagates_verbatim(self):
+        """The acceptance case: with Ballast refusing, the UNBOUND session's
+        write of a gated file exits 2 - not 0."""
+        with open(self.shim, "w") as f:
+            f.write(FAKE_SHIM_REFUSES)
+        proc = self._write(os.path.join(self.ws_dir, "policy.md"))
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("FAKE-BALLAST-REFUSAL", proc.stderr)
+
+
 class BallastDispatchUnboundTests(unittest.TestCase):
     def setUp(self):
         self.vault = make_vault()
