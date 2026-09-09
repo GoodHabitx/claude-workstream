@@ -405,6 +405,17 @@ def find_problems(manifests):
                                         "%s: absorbed[%d]=%r (expected {name, born_session, dir[, transcript]})"
                                         % (dirname, i, e)))
 
+        # Inv-1b: born_session IS the directory name (I1) - the dir's name
+        # both mints and equals the born_session. A mismatch means the
+        # immutable identity was rewritten (the very edit set_field now
+        # refuses) or the dir was moved; either way this node's edges resolve
+        # against the wrong key.
+        bs = m.get("born_session")
+        if isinstance(bs, str) and bs.strip() and bs != dirname:
+            problems.append(("born_session mismatch",
+                            "%s: born_session=%r does not match its directory name"
+                            % (dirname, bs)))
+
         # Inv-2: lineage - spawned_from_session resolves or is null/absent
         sfs = m.get("spawned_from_session")
         if isinstance(sfs, str) and sfs.strip() and sfs not in manifests:

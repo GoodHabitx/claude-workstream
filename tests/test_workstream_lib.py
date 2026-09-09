@@ -187,6 +187,24 @@ class ManifestScanTests(unittest.TestCase):
         kinds = [k for k, _d in problems]
         self.assertIn("stale direct_report (re-home)", kinds)
 
+    def test_find_problems_born_session_mismatch(self):
+        """R0-5: born_session IS the directory name (I1); a manifest whose
+        born_session no longer matches its dir is flagged (the identity was
+        rewritten, or the dir moved)."""
+        self._write_manifest("a", {"name": "a", "state": "active",
+                                   "born_session": "HACKED"})
+        manifests, _ = wslib.discover_manifests(self.ws_root)
+        problems = wslib.find_problems(manifests)
+        kinds = [k for k, _d in problems]
+        self.assertIn("born_session mismatch", kinds)
+
+    def test_find_problems_born_session_match_is_clean(self):
+        self._write_manifest("a", {"name": "a", "state": "active",
+                                   "born_session": "a"})
+        manifests, _ = wslib.discover_manifests(self.ws_root)
+        kinds = [k for k, _d in wslib.find_problems(manifests)]
+        self.assertNotIn("born_session mismatch", kinds)
+
     def test_find_problems_one_sided_collaborate(self):
         self._write_manifest("b", {"name": "b", "state": "active", "collaborate": []})
         self._write_manifest("a", {"name": "a", "state": "active",

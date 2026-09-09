@@ -347,6 +347,24 @@ class SetFieldTests(GatedTestCase):
         with self.assertRaises(ValueError):
             mprim.set_field(self.vault, "born-1", "rebound", ["x"], root=self.root)
 
+    def test_set_refuses_an_immutable_field(self):
+        """R0-5: identity/lineage is set once at birth and never rewritten -
+        the very fields three docs call immutable."""
+        for field in mprim.IMMUTABLE_FIELDS:
+            with self.assertRaises(ValueError, msg=field):
+                mprim.set_field(self.vault, "born-1", field, "HACKED", root=self.root)
+        data, _ = wslib.read_manifest(self.vault, "born-1", self.root)
+        self.assertEqual(data["born_session"], "born-1")   # untouched
+
+    def test_set_refuses_an_unknown_field(self):
+        """R0-5: a field name in neither SCHEMA_FIELDS nor the writable
+        allowlist is refused, not written through as a dead key."""
+        with self.assertRaises(ValueError):
+            mprim.set_field(self.vault, "born-1", "bogus_unknown_field", "x",
+                            root=self.root)
+        data, _ = wslib.read_manifest(self.vault, "born-1", self.root)
+        self.assertNotIn("bogus_unknown_field", data)
+
     def test_set_on_missing_manifest_raises(self):
         with self.assertRaises(FileNotFoundError):
             mprim.set_field(self.vault, "no-such-born", "focus", "x", root=self.root)
@@ -778,6 +796,21 @@ class ManifestCLITests(unittest.TestCase):
         proc = self._run("set", "born-cli2", "direct_report", json.dumps("bare-string"))
         self.assertEqual(proc.returncode, 2)
         self.assertIn("rejected", proc.stderr)
+
+    def test_cli_set_refuses_immutable_and_unknown_fields(self):
+        """R0-5: the reproduced path - `set <bs> born_session '"HACKED"'`,
+        `set created ...` and `set bogus_unknown_field ...` all landed on
+        disk with exit 0. Each must now exit 2 and leave nothing behind."""
+        self._run("create", "born-cli3", "--name", "n", "--focus", "f")
+        for field, value in (("born_session", '"HACKED"'), ("created", '"1999"'),
+                             ("spawned_from", '"x"'), ("bogus_unknown_field", '"x"')):
+            proc = self._run("set", "born-cli3", field, value)
+            self.assertEqual(proc.returncode, 2, "%s: %s" % (field, proc.stderr))
+        proc = self._run("read", "born-cli3")
+        data = json.loads(proc.stdout)
+        self.assertEqual(data["born_session"], "born-cli3")
+        self.assertNotEqual(data["created"], "1999")
+        self.assertNotIn("bogus_unknown_field", data)
 
 
 class ManifestCLIGateTests(GatedTestCase):

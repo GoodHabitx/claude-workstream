@@ -71,6 +71,13 @@ import workstream_lib as wslib
 
 LEGACY_FIELDS = ("parents", "parent", "parent_session", "rebound")
 
+# Identity + lineage: written ONCE at birth (create_manifest / repair) and
+# never rewritten (I4, and three doc copies call them immutable). set_field
+# refuses them the same way it refuses the retired fields - a declaration
+# with no mechanism is what let `set born_session '"HACKED"'` land on disk.
+IMMUTABLE_FIELDS = ("born_session", "created", "spawned_from",
+                    "spawned_from_session")
+
 # --- the approval gate (B2), FILE-scoped over four fields ------------------
 # The four fields whose change reshapes the FLEET rather than this one
 # workstream's own description of itself: who it answers to, who it works
@@ -132,6 +139,13 @@ SCHEMA_FIELDS = {
     "refocused": lambda v: isinstance(v, list),
     "previous_names": lambda v: isinstance(v, list),
 }
+
+# Fields set_field writes but does not shape-check (free-form strings the
+# schema does not otherwise constrain). Kept as an EXPLICIT allowlist beside
+# SCHEMA_FIELDS so a field name in neither set is refused as unknown rather
+# than written through as a dead key a typo invented (e.g. `maintainss`).
+WRITABLE_UNCHECKED_FIELDS = ("name", "focus", "last_touched",
+                             "absorbed_by", "absorbed_by_session")
 
 
 def _run_approve(approve_py, action, target, scope_path):
@@ -320,6 +334,17 @@ def set_field(vault, born_session, field, value, root=None, dry_run=False):
     True` (spec 4.3) validates everything but skips the write."""
     if field in LEGACY_FIELDS:
         raise ValueError("field %r is retired (L3/R1) - never written" % (field,))
+    if field in IMMUTABLE_FIELDS:
+        raise ValueError("field %r is immutable - identity/lineage is set once "
+                         "at birth (create/repair) and never rewritten (I4)"
+                         % (field,))
+    if field not in SCHEMA_FIELDS and field not in WRITABLE_UNCHECKED_FIELDS:
+        raise ValueError(
+            "field %r is not a known manifest field - refusing to write an "
+            "unrecognized key (a typo writes a dead field the schema never "
+            "reads). Known writable fields: %s"
+            % (field, ", ".join(sorted(set(SCHEMA_FIELDS)
+                                       | set(WRITABLE_UNCHECKED_FIELDS)))))
     manifest, err = wslib.read_manifest(vault, born_session, root)
     if manifest is None:
         raise FileNotFoundError("no manifest for %s (%s)" % (born_session, err or "not found"))
