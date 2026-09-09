@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 *.pyo
+
+# review plugin run records - inert bookkeeping (review README: safe to gitignore)
+.review/
