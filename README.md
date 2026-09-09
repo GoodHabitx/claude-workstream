@@ -15,6 +15,25 @@ and the ones vendored from Ballast's own templates (`policy ·
 global-policy · glossary`). See
 `docs/dependencies.md` and each script's own module docstring.
 
+## 0.1.5 changes
+
+- **A retired verb** (Adam, 2026-09-09). The on-demand, `when:`-matched
+  situational-recipe verb and file — Ballast's retired fifth artifact
+  class — are removed from this consumer in full: the vendored skill, its
+  SessionStart `--part`, its approval-gate entry and its scope keys. The
+  gate now covers three files (`policy` / `global-policy` / `glossary`),
+  the SessionStart split is three parts plus the global delivery, and
+  `/workstream:status` prints five artifacts, not six.
+- **Re-vendored from Ballast 0.1.3.** `shim/ballast-shim.py` stays
+  byte-identical to Ballast 0.1.3's; the three skill templates and the
+  default scope (`fixtures/scope-example/ballast.json`, verbatim) are
+  re-synced from it via its own `sync-templates.py`.
+- **Broken-manifest boot NOTE aligned** to the flag-once +
+  repair-keeping-content pattern: a present-but-broken `workstream.json`
+  now names `manifest.py repair`, which moves the bad file aside to a
+  `.corrupt-<ts>` backup (content preserved) and rewrites the canonical
+  shape; a genuinely absent manifest still points at adopt/fork self-heal.
+
 ## 0.1.4 changes
 
 Against Ballast 0.1.2 as shipped:
@@ -174,8 +193,8 @@ or on Windows:
 py -3 tests\test_workstream_lib.py
 ```
 
-238 tests total, including the crafted-stdin cases for `boot.py`/
-`remind.py`/`precompact.py` (28 across the three - see each file's own
+255 tests total, including the crafted-stdin cases for `boot.py`/
+`remind.py`/`precompact.py` (32 across the three - see each file's own
 module docstring for the enumerated cases), the manifest single-writer +
 absorb cross-write (including every mutating primitive's `--dry-run`/
 `dry_run` path, spec 4.3), sidecar self-heal, views regeneration, and the
