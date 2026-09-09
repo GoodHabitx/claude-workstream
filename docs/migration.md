@@ -185,6 +185,15 @@ Everything else (`root`, `log`, `hot`, `index`, `policy`, `regen`,
 `ballast.json` at all gets the same new default written fresh - a
 creation, not a migration.
 
+**Playbook removed (0.1.5).** ballast 0.1.3 and this release dropped the
+`playbook.md` file class entirely. A scope written by workstream 0.1.4
+still carries the now-dead `playbook` / `playbook_inject_cap_bytes` /
+`playbook_file_warn_bytes` keys, and a `playbook.md` may still sit in the
+scope dir. Both are **inert** after upgrade - `load_scope` ignores the
+keys, nothing injects or gates the file, and `/workstream:status` no
+longer prints it. They are left in place (not deleted) and are safe to
+remove by hand.
+
 **Measured against the live state root, 2026-09-08** (43 workstream
 dirs): 23 hold the 0.1.1 default byte-for-byte and will be REWRITTEN, 20
 have no `ballast.json` and will have one CREATED, 0 are customized. So
