@@ -7,6 +7,8 @@ description: Fold a still-open, stale workstream into an overtaker that already 
 
 Shares the shared model: `${CLAUDE_PLUGIN_ROOT}/docs/workstream-model.md`.
 
+> These commands run FROM THE VAULT ROOT: each script reads the vault as `os.getcwd()`, and `${CLAUDE_PLUGIN_ROOT}` resolves to this plugin's own install directory.
+
 End a workstream by folding it into another that overtook it — the
 "superseded" ending, distinct from `workstream:close`'s "finished."
 This redesign (AB1-AB7) fixes an observed failure: an overtaker that
@@ -49,7 +51,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
      **never merged** — it stays as provenance, untouched.
 
 3. **Point — the determinism anchor (AB3).** `workstream:manifest`
-   ("absorbed[] — append", underlying: `python3 scripts/manifest.py append-absorbed <overtaker-born-session> --name <stale-name> --absorbed-born-session <stale-born-session> --dir <stale-ws-dir-path> [--transcript <stale-transcript-path-if-still- on-disk>]`) — a direct write on the overtaker's OWN manifest field.
+   ("absorbed[] — append", underlying: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/manifest.py append-absorbed <overtaker-born-session> --name <stale-name> --absorbed-born-session <stale-born-session> --dir <stale-ws-dir-path> [--transcript <stale-transcript-path-if-still- on-disk>]`) — a direct write on the overtaker's OWN manifest field.
    Resolve the transcript path via the stale workstream's matching
    sidecar (`born_session` match) — **best-effort**: transcripts can
    vanish from disk (measured), so omit `--transcript` rather than
@@ -84,7 +86,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 
 5. **Close the stale manifest — as absorbed, not closed.** This is the
    ONE sanctioned cross-manifest write in the whole plugin:
-   `workstream:manifest` ("absorb-close" — underlying: `python3 scripts/manifest.py absorb-close <stale-born-session> --by-name <overtaker-name> --by-session <overtaker-born-session> [--vault-lock .vault-meta/bin/vault-lock.sh --lock-session <this-session-id>]`). Sets `state: absorbed` +
+   `workstream:manifest` ("absorb-close" — underlying: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/manifest.py absorb-close <stale-born-session> --by-name <overtaker-name> --by-session <overtaker-born-session> [--vault-lock .vault-meta/bin/vault-lock.sh --lock-session <this-session-id>]`). Sets `state: absorbed` +
    `absorbed_by`/`absorbed_by_session` together, vault-lock-wrapped
    when the lock is available, degrading to an unlocked write + stderr
    warning otherwise (never blocks on the lock's absence — AB1's
@@ -125,7 +127,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 8. **Offer archival** of the stale session to the principal — always
    confirmed, never automatic.
 
-9. **Regenerate the fleet views.** `python3 scripts/views.py regen`.
+9. **Regenerate the fleet views.** `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/views.py regen`.
 
 10. **Confirm** what moved: the folded hot-cache content, the
     overtaker's updated focus/projects, how many direct-reports

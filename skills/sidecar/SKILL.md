@@ -7,12 +7,14 @@ description: Resolve, write, self-heal, or check this session's sidecar — the 
 
 Shares the shared model: `${CLAUDE_PLUGIN_ROOT}/docs/workstream-model.md`.
 
+> These commands run FROM THE VAULT ROOT: each script reads the vault as `os.getcwd()`, and `${CLAUDE_PLUGIN_ROOT}` resolves to this plugin's own install directory.
+
 The sidecar primitive (I5, L3): `.vault-meta/workstream-sessions/<session_id>.json`
 maps THIS conversation's rotating transcript id → the workstream's
 durable `born_session`. Disposable and self-healing by design — losing
 one is never a failure of the workstream itself, only of this one
 lookup, and this skill's whole job is to make that repair mechanical
-instead of silent. All operations route through `scripts/sidecar.py`
+instead of silent. All operations route through `${CLAUDE_PLUGIN_ROOT}/scripts/sidecar.py`
 (core, already built — do not edit it). Never touches a manifest field
 or a vault project/spine node.
 
@@ -29,7 +31,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 
 2. **Bare invocation / `check` with no expected `born_session`** =
    resolve and report:
-   `python3 scripts/sidecar.py resolve <session_id>` → JSON
+   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sidecar.py resolve <session_id>` → JSON
    `{born_session, ws_dir}` on stdout, exit 0 = bound (report which
    workstream, and confirm its manifest at `<ws_dir>/workstream.json`
    still exists and matches); exit 1 = **unbound** — this is the
@@ -41,7 +43,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 
 3. **`check <born_session>`** (when the caller already believes this
    session belongs to a specific workstream — e.g. a title reads
-   `ws-<name>` but boot reported unbound): `python3 scripts/sidecar.py check <session_id> <born_session>` → prints `match` / `missing` /
+   `ws-<name>` but boot reported unbound): `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sidecar.py check <session_id> <born_session>` → prints `match` / `missing` /
    `mismatch`, exit 0 always. Report the verdict plainly:
    - `match` — sidecar already correct, nothing to do.
    - `missing` — no sidecar exists; offer `self-heal` below.
@@ -56,7 +58,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
    step 2/3 established this session really should point at
    `<born_session>` (its title reads `ws-<name>`, or the caller just
    confirmed a mismatch): read that manifest's `name`/`focus` first
-   (`python3 scripts/manifest.py read <born_session>`), then `python3 scripts/sidecar.py self-heal <session_id> <born_session> --name <name> --focus <focus>` — writes the sidecar and prints a loud
+   (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/manifest.py read <born_session>`), then `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sidecar.py self-heal <session_id> <born_session> --name <name> --focus <focus>` — writes the sidecar and prints a loud
    one-line confirmation. This never mints a new manifest and never
    touches `workstream.json` — it only repairs the transcript-id →
    born_session pointer. If no manifest exists at `<born_session>` at
@@ -66,7 +68,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 5. **Write** (the lower-level primitive underneath `self-heal`, used
    directly only by another skill's own composite flow — e.g.
    `workstream:fork`'s birth, `workstream:adopt`'s schema-init delegate
-   path): `python3 scripts/sidecar.py write <session_id> <born_session> [--name <name>] [--focus <focus>] [--dry-run]`. Prefer `self-heal`
+   path): `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sidecar.py write <session_id> <born_session> [--name <name>] [--focus <focus>] [--dry-run]`. Prefer `self-heal`
    for a direct caller-facing repair; `write` is the primitive other
    skills compose with.
 

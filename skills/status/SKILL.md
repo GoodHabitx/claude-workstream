@@ -7,6 +7,8 @@ description: Print this workstream's six artifacts exactly as they are on disk â
 
 Shares the shared model: `${CLAUDE_PLUGIN_ROOT}/docs/workstream-model.md`.
 
+> These commands run FROM THE VAULT ROOT: each script reads the vault as `os.getcwd()`, and `${CLAUDE_PLUGIN_ROOT}` resolves to this plugin's own install directory.
+
 Shows what this workstream's continuity files ACTUALLY say â€” the bytes,
 not a reading of them. It exists because every other route to these files
 goes through a model that is already carrying the session's assumptions:
@@ -31,7 +33,7 @@ trusted to describe it.
 
 2. **Run it, and print what it prints.**
    ```
-   python3 scripts/status.py [artifact] --session <session_id>
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/status.py [artifact] --session <session_id>
    ```
    `artifact` is one of `manifest`, `hot`, `policy`, `global-policy`,
    `glossary`, `playbook`. With no argument all six print, in that order.

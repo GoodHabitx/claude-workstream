@@ -7,9 +7,11 @@ description: Birth a fork — run INSIDE a spawned session after the principal's
 
 Shares the shared model: `${CLAUDE_PLUGIN_ROOT}/docs/workstream-model.md`.
 
+> These commands run FROM THE VAULT ROOT: each script reads the vault as `os.getcwd()`, and `${CLAUDE_PLUGIN_ROOT}` resolves to this plugin's own install directory.
+
 Birth a fork into the workstream graph — runs **inside the spawned
 `(fork)` session** after the principal's native `/fork`. Every manifest
-write routes through `scripts/manifest.py` — this skill decides WHEN,
+write routes through `${CLAUDE_PLUGIN_ROOT}/scripts/manifest.py` — this skill decides WHEN,
 the primitive owns HOW. Reconciling forks from *elsewhere* (an audit
 that drives a remote `(fork)` session to run this verb) is
 `workstream:connect`, not this. Adopting a brand-new root is
@@ -30,11 +32,11 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 
 3. **Idempotency first — key on the stable sidebar uuid, not the
    transcript id.** Get this session's own bare uuid (the `<!-- workstream-session-id: ... -->` line's value works for a
-   root/fork session — it IS the sidebar uuid here). `python3 scripts/manifest.py read <this-session-id>` (exit 0 = already
+   root/fork session — it IS the sidebar uuid here). `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/manifest.py read <this-session-id>` (exit 0 = already
    birthed by a prior, possibly partial, run):
    - **Exists** → do NOT re-mint or re-ask Q2. **Resume the binding**:
-     `python3 scripts/sidecar.py self-heal <session_id> <this-session-id> --name <name> --focus <focus>` (values from the
-     existing manifest) if `python3 scripts/sidecar.py check <session_id> <this-session-id>` reports `missing`; re-apply the
+     `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sidecar.py self-heal <session_id> <this-session-id> --name <name> --focus <focus>` (values from the
+     existing manifest) if `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sidecar.py check <session_id> <this-session-id>` reports `missing`; re-apply the
      title `ws-<name>`. **Re-run step 8's parent notify** (reconstruct
      from the resumed manifest's `spawned_from` + any `direct_report`/
      `collaborate`) — a birth run can crash between sidecar-write and
@@ -60,13 +62,13 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
    (scan manifests); on a collision, disambiguate with a variant (fork
    cannot refuse — the session is already forked).
 
-6. **Birth this session's OWN manifest.** `python3 scripts/manifest.py create <this-session-id> --name <new-name> --focus "<mission>" --spawned-from <parent-name> --spawned-from-session <parent-born-session>` (read the parent's `born_session` from its
+6. **Birth this session's OWN manifest.** `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/manifest.py create <this-session-id> --name <new-name> --focus "<mission>" --spawned-from <parent-name> --spawned-from-session <parent-born-session>` (read the parent's `born_session` from its
    own manifest first — a read, never a write). Writes the canonical-
    empty relationship fields (`direct_report: null`, `collaborate: []`,
    no `parents` key) automatically.
 
    **Then bind the session immediately — before step 7's relationship
-   writes.** `python3 scripts/sidecar.py write <session_id> <this-session-id> --name <new-name> --focus "<mission>"`. This makes
+   writes.** `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sidecar.py write <session_id> <this-session-id> --name <new-name> --focus "<mission>"`. This makes
    step 7's `workstream:manifest` calls resolve normally (via the
    sidecar) instead of needing a delegate bypass.
 
@@ -94,7 +96,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
    send to a reachable-looking parent is WARN + PROCEED — the child's
    manifest is already correct; `workstream:connect` reconciles later.
 
-10. **Regenerate the fleet views.** `python3 scripts/views.py regen`.
+10. **Regenerate the fleet views.** `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/views.py regen`.
 
 11. **Confirm** in one line: child born and bound as `ws-<new-name>`,
     `spawned_from = <parent>`, and which of direct_report/collaborate

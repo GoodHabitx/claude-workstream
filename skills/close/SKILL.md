@@ -7,6 +7,8 @@ description: Mark a workstream done — set its manifest state to closed via wor
 
 Shares the shared model: `${CLAUDE_PLUGIN_ROOT}/docs/workstream-model.md`.
 
+> These commands run FROM THE VAULT ROOT: each script reads the vault as `os.getcwd()`, and `${CLAUDE_PLUGIN_ROOT}` resolves to this plugin's own install directory.
+
 Mark a finished workstream done — the "satisfied" ending, distinct from
 `workstream:absorb`'s "superseded." Every manifest field write routes
 through `workstream:manifest`'s named routes — never hand-rolled JSON.
@@ -17,7 +19,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 
 ## `close [name]`
 
-1. **Target** = THIS session's bound workstream (`python3 scripts/sidecar.py resolve <session_id>`), or the named `<name>`
+1. **Target** = THIS session's bound workstream (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sidecar.py resolve <session_id>`), or the named `<name>`
    resolved by scanning the state root's manifests. Hold the target's
    `born_session` uuid — every dependent edge resolves against it.
 
@@ -72,7 +74,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
    that session records it, or leave a short note via vault-lock
    (closed) if that's the only path.
 
-7. **Regenerate the fleet views.** `python3 scripts/views.py regen`.
+7. **Regenerate the fleet views.** `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/views.py regen`.
 
 8. **Never destroy.** close marks state; it never deletes the
    manifest, caches, or history. Archiving the session itself is a

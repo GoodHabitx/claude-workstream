@@ -54,6 +54,31 @@ class SkillTreeTests(unittest.TestCase):
             self.assertEqual(frontmatter_name(read(name)), name)
 
 
+class ScriptInvocationTests(unittest.TestCase):
+    """R0-1: a skill runs from the session cwd (the vault root), where no
+    `scripts/` directory exists - the scripts live at the plugin root. Every
+    `scripts/<x>.py` a SKILL.md names must therefore be spelled
+    `${CLAUDE_PLUGIN_ROOT}/scripts/<x>.py`, or the command cannot resolve its
+    own script. This scans EVERY SKILL.md (frontmatter included) and fails on
+    any `scripts/<x>.py` not immediately preceded by `${CLAUDE_PLUGIN_ROOT}/`."""
+
+    SCRIPT_RE = re.compile(r"scripts/[a-z_]+\.py")
+    PREFIX = "${CLAUDE_PLUGIN_ROOT}/"
+
+    def test_no_bare_script_path_in_any_skill(self):
+        offenders = []
+        for name in EXPECTED_SKILLS:
+            text = read(name)
+            for m in self.SCRIPT_RE.finditer(text):
+                start = m.start()
+                if text[max(0, start - len(self.PREFIX)):start] != self.PREFIX:
+                    line = text.count("\n", 0, start) + 1
+                    offenders.append("%s:%d %s" % (name, line, m.group(0)))
+        self.assertEqual(offenders, [],
+                         "bare scripts/<x>.py without ${CLAUDE_PLUGIN_ROOT}/: "
+                         + "; ".join(offenders))
+
+
 class VendoredSkillTests(unittest.TestCase):
     def test_each_vendored_skill_carries_its_template_marker(self):
         for name in VENDORED:

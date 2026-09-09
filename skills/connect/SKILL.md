@@ -7,6 +7,8 @@ description: Bounded reconciliation AUDIT of the workstream graph — scan every
 
 Shares the shared model: `${CLAUDE_PLUGIN_ROOT}/docs/workstream-model.md`.
 
+> These commands run FROM THE VAULT ROOT: each script reads the vault as `os.getcwd()`, and `${CLAUDE_PLUGIN_ROOT}` resolves to this plugin's own install directory.
+
 The general **reconciliation audit** over the workstream graph. Scans,
 detects, and proposes-then-confirms fixes — recruits the primitives
 (`workstream:manifest`, `workstream:policy`) and `workstream:fork` to
@@ -112,7 +114,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
      it into a decision. Apply the answer through the same routes. Do
      not guess.
 
-4. **Regenerate the derived views** (invariant 8, always): `python3 scripts/views.py regen`.
+4. **Regenerate the derived views** (invariant 8, always): `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/views.py regen`.
 
 5. **Report the reconciliation.** One compact section: each
    invariant's status (pass/flagged/fixed), what was flagged, what was

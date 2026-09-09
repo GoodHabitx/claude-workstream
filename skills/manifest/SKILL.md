@@ -7,12 +7,14 @@ description: Set a field on this session's own workstream manifest — who it re
 
 Shares the shared model: `${CLAUDE_PLUGIN_ROOT}/docs/workstream-model.md`.
 
+> These commands run FROM THE VAULT ROOT: each script reads the vault as `os.getcwd()`, and `${CLAUDE_PLUGIN_ROOT}` resolves to this plugin's own install directory.
+
 Own `.vault-meta/workstreams/<born_session>/workstream.json` (path from
 `workstream_lib.state_root()` / `config.json`'s `state_root`) — the
 schema-authority primitive every composite verb (`fork`, `refocus`,
 `connect`, `absorb`, `close`, `adopt`) routes its manifest writes
 through, rather than hand-rolling JSON. All writes go through
-`scripts/manifest.py` (core, already built — do not edit it). Run this
+`${CLAUDE_PLUGIN_ROOT}/scripts/manifest.py` (core, already built — do not edit it). Run this
 **in the session** whose manifest you're changing. Never touches a vault
 project/spine node.
 
@@ -24,7 +26,7 @@ project/spine node.
 
 1. **Target = THIS session's bound workstream, always.** Read the
    `<!-- workstream-session-id: ... -->` line boot.py injected this
-   session for the transcript `session_id`. Resolve: `python3 scripts/sidecar.py resolve <session_id>` → JSON `{born_session, ws_dir}` on stdout, exit 0. **Exit 1 (no sidecar) → refuse** — this
+   session for the transcript `session_id`. Resolve: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sidecar.py resolve <session_id>` → JSON `{born_session, ws_dir}` on stdout, exit 0. **Exit 1 (no sidecar) → refuse** — this
    session isn't bound — and point to `/workstream:adopt`. There is no
    cross-session target argument; this verb never takes a `<name>`
    naming a different workstream.
@@ -36,7 +38,7 @@ project/spine node.
    Never a direct reach-in on a live peer.
 
 3. **Bare invocation = show + validate + verify, read-only, STOP.**
-   `python3 scripts/manifest.py read <born_session>` and print it.
+   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/manifest.py read <born_session>` and print it.
    Validate: `direct_report` a single `{name, session}` object or
    `null` (never a list); `collaborate` a list of `{name, session, scope}`; `refocused`/`previous_names`/`projects`/`maintains`/
    `absorbed` are arrays. An **active** manifest carrying legacy
@@ -146,7 +148,7 @@ project/spine node.
      the only route in this whole plugin that touches a manifest other
      than the caller's own.
 
-6. **Regenerate the fleet views** after any write: `python3 scripts/views.py regen`.
+6. **Regenerate the fleet views** after any write: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/views.py regen`.
 
 7. **Confirm** in one line: which field changed, old → new, and any
    reciprocity notify performed.

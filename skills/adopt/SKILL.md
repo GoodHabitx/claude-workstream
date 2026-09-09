@@ -7,6 +7,8 @@ description: Turn THIS session into a workstream — birth a new manifest, sidec
 
 Shares the shared model: `${CLAUDE_PLUGIN_ROOT}/docs/workstream-model.md`.
 
+> These commands run FROM THE VAULT ROOT: each script reads the vault as `os.getcwd()`, and `${CLAUDE_PLUGIN_ROOT}` resolves to this plugin's own install directory.
+
 Turn the current session into a workstream — the bare, default entry to
 the `/workstream:*` suite (renamed from `/cos:workstream`, E1). This
 skill only **births a brand-new chain by promotion of THIS session**.
@@ -35,8 +37,8 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
    boot.py didn't fire — say so, don't guess.
 
 3. **Check whether THIS session's own uuid is already a workstream —
-   BEFORE touching any name.** `python3 scripts/manifest.py read <this-session-id>` (exit 0 = exists):
-   - **Exists and this session's title matches `^ws-<that manifest's name>`** → plain **self-heal**: `python3 scripts/sidecar.py self-heal <session_id> <born_session> --name <name> --focus <focus>` (values from the existing manifest — no new mint). Stop —
+   BEFORE touching any name.** `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/manifest.py read <this-session-id>` (exit 0 = exists):
+   - **Exists and this session's title matches `^ws-<that manifest's name>`** → plain **self-heal**: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sidecar.py self-heal <session_id> <born_session> --name <name> --focus <focus>` (values from the existing manifest — no new mint). Stop —
      don't ask, don't re-confirm the title, don't proceed further.
    - **Exists but the title doesn't match** → REFUSE: report which
      workstream this session is already bound to (its manifest's
@@ -51,7 +53,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 
 5. **Check for an existing manifest with this NAME** (a different
    `born_session` already using it): scan the state root's manifests
-   (`python3 scripts/views.py regen --dry-run` reads them all; or list
+   (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/views.py regen --dry-run` reads them all; or list
    `.vault-meta/workstreams/*/workstream.json` and grep each `name`
    field) for a `name` match:
    - **A live session is already bound to it** → STOP, report it — one
@@ -66,7 +68,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
    - **No manifest with this name** → proceed to birth.
 
 6. **Birth the manifest** via the primitive's schema-init route:
-   `python3 scripts/manifest.py create <this-session-id> --name <name> [--focus "<focus>"]` — writes the full canonical-empty shape
+   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/manifest.py create <this-session-id> --name <name> [--focus "<focus>"]` — writes the full canonical-empty shape
    (`spawned_from`/`spawned_from_session: null`, `direct_report: null`,
    `collaborate: []`, `refocused: []`, `previous_names: []`,
    `projects: []`, `maintains: []`, `absorbed: []`; **no `parents`
@@ -78,14 +80,14 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 7. **Set the title.** `set_session_title("self", "ws-<name>")` — just
    `ws-` + the name, no focus suffix.
 
-8. **Write the sidecar.** `python3 scripts/sidecar.py write <session_id> <this-session-id> --name <name> --focus "<focus>"`.
+8. **Write the sidecar.** `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sidecar.py write <session_id> <this-session-id> --name <name> --focus "<focus>"`.
 
 9. **Ballast owns `hot.md`/`log.md`/`policy.md`/`index.md` creation for
    the new scope** — not this skill (X7/B2). If the scope isn't picked
    up automatically on the next Ballast checkpoint, that's a Ballast-
    side gap to report, not something to hand-write here.
 
-10. **Regenerate the fleet views.** `python3 scripts/views.py regen`.
+10. **Regenerate the fleet views.** `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/views.py regen`.
 
 11. **Confirm** in one line: the workstream's name, and that it's newly
     born.

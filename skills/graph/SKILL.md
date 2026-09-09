@@ -1,11 +1,13 @@
 ---
 name: graph
-description: Regenerate the mermaid graph of the whole workstream tree — lineage, reporting, collaboration, succession, and rename history — from every manifest, via scripts/views.py regen. A GENERATED artifact, overwritten each run; lands at the state root's workstream-graph.md. Trigger on "workstream graph", "graph the workstreams", "show the workstream tree", "/workstream:graph". Do NOT use to roll-call sessions (workstream:list), adopt (workstream:adopt), or reconcile forks (workstream:connect).
+description: Regenerate the mermaid graph of the whole workstream tree — lineage, reporting, collaboration, succession, and rename history — from every manifest. A GENERATED artifact, overwritten each run; lands at the state root's workstream-graph.md. Trigger on "workstream graph", "graph the workstreams", "show the workstream tree", "/workstream:graph". Do NOT use to roll-call sessions (workstream:list), adopt (workstream:adopt), or reconcile forks (workstream:connect).
 ---
 
 # Workstream graph
 
 Shares the shared model: `${CLAUDE_PLUGIN_ROOT}/docs/workstream-model.md`.
+
+> These commands run FROM THE VAULT ROOT: each script reads the vault as `os.getcwd()`, and `${CLAUDE_PLUGIN_ROOT}` resolves to this plugin's own install directory.
 
 Regenerate a mermaid graph of the whole workstream tree — a
 **generated** artifact (never hand-edited), overwritten each run.
@@ -21,7 +23,7 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 
 ## `/workstream:graph [--root <path>]`
 
-1. **Invoke the generator.** `python3 scripts/views.py regen [--root <path>]` — scans every `workstream.json` under the state root,
+1. **Invoke the generator.** `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/views.py regen [--root <path>]` — scans every `workstream.json` under the state root,
    resolves every edge by its immutable session half, and writes both
    `<state_root>/index.md` and `<state_root>/workstream-graph.md`
    (views.py regenerates both together — there is no graph-only mode

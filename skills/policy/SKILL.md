@@ -53,11 +53,14 @@ the consumer's own and survives a re-sync.
 - Writing `policy.md` by hand: the gate refuses it, and that is the point.
 
 <!-- consumer-extras -->
+
+> These commands run FROM THE VAULT ROOT: each script reads the vault as `os.getcwd()`, and `${CLAUDE_PLUGIN_ROOT}` resolves to this plugin's own install directory.
+
 ## Which scope (workstream's own resolution)
 
 The scope is **this session's own bound workstream**, always. Read the
 `<!-- workstream-session-id: ... -->` line `boot.py` injected this
-session, then resolve it: `python3 scripts/sidecar.py resolve <session_id>`
+session, then resolve it: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sidecar.py resolve <session_id>`
 prints `{born_session, ws_dir}` and exits 0. Exit 1 means this session is
 not bound - refuse and point at `/workstream:adopt`. The scope file is
 `<ws_dir>/ballast.json`; `policy.md` sits beside it. There is no
