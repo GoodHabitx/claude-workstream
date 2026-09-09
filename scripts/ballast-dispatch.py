@@ -44,7 +44,12 @@ Write/Edit/NotebookEdit of a `workstream.json` under the state root
 (WORKSTREAM_MANIFEST_REFUSAL below). Manifests are schema-authoritative
 and single-writer; every field write goes through scripts/manifest.py.
 That check runs whether or not this session is bound - it protects the
-state root, not this session's own identity.
+state root, not this session's own identity. It honors
+`<state-root>/ballast-gate.disabled` exactly as manifest.py's approval
+gate does: with the switch present the write is ALLOWED with a loud stderr
+note (the documented repair escape hatch), never silently refused - so a
+malformed or hand-corrupted manifest is never left with no path back
+(`manifest.py repair` is the in-schema route, this switch the raw one).
 
 Unbound sessions (no sidecar, or born_session doesn't resolve to an
 existing dir - the common case for most sessions/most turns): near-zero-
@@ -146,6 +151,10 @@ MANIFEST_FILENAME = "workstream.json"
 WRITE_TOOL_NAMES = ("write", "edit", "notebookedit")
 PATH_KEYS = ("file_path", "path", "notebook_path")
 REFUSAL_EXIT = 2   # the hook protocol's refusal code (ballast_lib.REFUSAL_EXIT)
+# Ballast's master off-switch, honored here for the same reason manifest.py's
+# approval gate honors it: a vault deliberately running without the gate must
+# still be able to write - here, REPAIR - its own manifests.
+GATE_DISABLED_FILENAME = "ballast-gate.disabled"
 
 WORKSTREAM_MANIFEST_REFUSAL = (
     "workstream: %s may not be written with Write/Edit/NotebookEdit.\n"
@@ -156,7 +165,20 @@ WORKSTREAM_MANIFEST_REFUSAL = (
     "The sanctioned path: run /workstream:manifest, which routes to the "
     "primitive - manifest.py set BORN_SESSION FIELD JSON-VALUE (or the "
     "collaborate-add / collaborate-remove / append-absorbed subcommand). Read "
-    "it back with manifest.py read BORN_SESSION."
+    "it back with manifest.py read BORN_SESSION. A manifest that no longer "
+    "parses (which `set` cannot read) is rebuilt with manifest.py repair "
+    "BORN_SESSION --name NAME (moves the unusable file aside, writes the "
+    "canonical shape); or disarm the guard by creating %s under the state "
+    "root."
+)
+
+MANIFEST_GUARD_OFF_NOTE = (
+    "workstream: %s is normally write-guarded (schema-authoritative, "
+    "single-writer), but the manifest gate is OFF (%s exists under %s) - "
+    "ALLOWING this direct Write. This is the documented repair escape hatch; "
+    "to rewrite a malformed manifest through the schema prefer manifest.py "
+    "repair BORN_SESSION --name NAME, and remove the switch to re-arm the "
+    "guard."
 )
 
 
@@ -363,8 +385,18 @@ def main(argv):
     if event == "PreToolUse":
         refused = manifest_write_refused(payload, vault)
         if refused:
-            sys.stderr.write(WORKSTREAM_MANIFEST_REFUSAL % refused + "\n")
-            return REFUSAL_EXIT
+            state_root = wslib.state_root(vault)
+            if os.path.isfile(os.path.join(state_root, GATE_DISABLED_FILENAME)):
+                # Disarmed exactly as manifest.py's approval gate is: allow
+                # the write, but say so loudly - a corrupt manifest must have
+                # a way back, and this is the raw one.
+                sys.stderr.write(MANIFEST_GUARD_OFF_NOTE
+                                 % (refused, GATE_DISABLED_FILENAME, state_root)
+                                 + "\n")
+            else:
+                sys.stderr.write(WORKSTREAM_MANIFEST_REFUSAL
+                                 % (refused, GATE_DISABLED_FILENAME) + "\n")
+                return REFUSAL_EXIT
 
     scope_path = resolve_scope(vault, session_id, scope_kind)
     if not scope_path and event == "PreToolUse" and scope_kind != "global":

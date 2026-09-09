@@ -400,6 +400,19 @@ class BallastDispatchManifestGuardTests(unittest.TestCase):
         self.assertIn("manifest.py", proc.stderr)
         self.assertEqual(proc.stdout, "")
 
+    def test_the_disarm_switch_allows_the_write_with_a_loud_note(self):
+        """R0-3: `<state-root>/ballast-gate.disabled` disarms this guard
+        exactly as it disarms manifest.py's approval gate - the write is
+        allowed (never exit 2) with a loud stderr note, so a malformed or
+        hand-corrupted manifest always has a way back."""
+        open(os.path.join(wslib.state_root(self.vault),
+                          "ballast-gate.disabled"), "w").close()
+        proc = self._pre_tool_use({"session_id": "sess-m", "tool_name": "Write",
+                                   "tool_input": {"file_path": self.manifest}})
+        self.assertNotEqual(proc.returncode, 2)
+        self.assertIn("manifest gate is OFF", proc.stderr)
+        self.assertNotIn("may not be written", proc.stderr)
+
     def test_every_write_tool_is_covered(self):
         for tool, key in (("Write", "file_path"), ("Edit", "file_path"),
                           ("NotebookEdit", "notebook_path")):

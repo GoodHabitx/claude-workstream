@@ -252,6 +252,65 @@ class CreateManifestTests(unittest.TestCase):
         self.assertIsNone(data)
 
 
+class RepairManifestTests(unittest.TestCase):
+    """R0-3: a workstream.json that no longer parses has no other write path
+    (`set` refuses it, the direct-Write guard refuses a hand edit). repair is
+    the in-schema route: it moves the unusable file aside and rewrites the
+    canonical shape, and refuses to touch a well-formed manifest."""
+
+    def setUp(self):
+        self.vault = make_vault()
+        self.root = tempfile.mkdtemp(prefix="ws_plugin_root_")
+
+    def tearDown(self):
+        shutil.rmtree(self.vault, ignore_errors=True)
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def _malform(self, born_session, text="not json{"):
+        path = wslib.manifest_path_for(self.vault, born_session, self.root)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(text)
+        return path
+
+    def test_set_cannot_touch_a_malformed_manifest(self):
+        self._malform("born-r")
+        with self.assertRaises(FileNotFoundError):
+            mprim.set_field(self.vault, "born-r", "focus", "x", root=self.root)
+
+    def test_repair_rewrites_a_malformed_manifest_and_backs_it_up(self):
+        path = self._malform("born-r")
+        p, backup, err = mprim.repair_manifest(self.vault, "born-r", "ws-r",
+                                               "do it", root=self.root)
+        self.assertEqual(p, path)
+        self.assertTrue(os.path.isfile(backup))
+        self.assertEqual(err, "malformed JSON")
+        data, e = wslib.read_manifest(self.vault, "born-r", self.root)
+        self.assertIsNone(e)
+        self.assertEqual(data["name"], "ws-r")
+        self.assertEqual(data["state"], "active")
+        self.assertEqual(data["born_session"], "born-r")
+        self.assertEqual(data["direct_report"], None)
+        self.assertEqual(data["maintains"], [])
+
+    def test_repair_refuses_a_well_formed_manifest(self):
+        mprim.create_manifest(self.vault, "born-ok", "ws-ok", "f", root=self.root)
+        with self.assertRaises(ValueError):
+            mprim.repair_manifest(self.vault, "born-ok", "ws-ok", root=self.root)
+
+    def test_repair_on_a_missing_manifest_raises(self):
+        with self.assertRaises(FileNotFoundError):
+            mprim.repair_manifest(self.vault, "born-none", "ws", root=self.root)
+
+    def test_repair_dry_run_touches_nothing(self):
+        path = self._malform("born-d")
+        before = open(path, encoding="utf-8").read()
+        _p, backup, _err = mprim.repair_manifest(self.vault, "born-d", "ws-d",
+                                                 root=self.root, dry_run=True)
+        self.assertFalse(os.path.isfile(backup))
+        self.assertEqual(open(path, encoding="utf-8").read(), before)
+
+
 class SetFieldTests(GatedTestCase):
     def extra_setup(self):
         mprim.create_manifest(self.vault, "born-1", "a", "f", root=self.root)

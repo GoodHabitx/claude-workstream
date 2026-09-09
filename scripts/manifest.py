@@ -52,6 +52,8 @@ CLI (subprocess surface for skills + tests):
     manifest.py read <born_session>
     manifest.py create <born_session> --name N --focus F
                  [--spawned-from NAME --spawned-from-session ID]
+    manifest.py repair <born_session> --name N [--focus F]
+                 [--spawned-from NAME --spawned-from-session ID]
     manifest.py set <born_session> <field> <json-value>
     manifest.py collaborate-add <born_session> --peer-session ID --peer-name N [--scope S]
     manifest.py collaborate-remove <born_session> --peer-session ID
@@ -222,6 +224,45 @@ def create_manifest(vault, born_session, name, focus, spawned_from=None,
     }
     wslib.atomic_write_json(path, data, dry_run=dry_run)
     return path
+
+
+def repair_manifest(vault, born_session, name, focus="", spawned_from=None,
+                    spawned_from_session=None, root=None, dry_run=False):
+    """The repair route (R0-3): a workstream.json that no longer parses has
+    no other write path - `set` refuses it (read_manifest returns 'malformed
+    JSON', set_field raises FileNotFoundError) and the direct-Write guard
+    refuses a hand edit, so a corrupt manifest would otherwise be permanently
+    unrepairable. repair moves the unusable file aside to a timestamped
+    `.corrupt-<ts>` backup (history is never deleted) and writes a fresh
+    canonical-empty manifest through the schema.
+
+    Refuses (ValueError) when the manifest is ALREADY well-formed - repair
+    never clobbers a good manifest; `set` is the route for a field on a
+    readable one. `dry_run=True` (spec 4.3) runs every check and reports the
+    backup path it WOULD use, writing nothing and moving nothing."""
+    if not (isinstance(born_session, str) and wslib.SAFE_ID_RE.match(born_session)):
+        raise ValueError("unsafe born_session: %r" % (born_session,))
+    path = wslib.manifest_path_for(vault, born_session, root)
+    if not os.path.isfile(path):
+        raise FileNotFoundError("no manifest to repair at %s" % path)
+    manifest, err = wslib.read_manifest(vault, born_session, root)
+    if manifest is not None:
+        raise ValueError("manifest at %s is already well-formed - use `set`; "
+                         "repair never overwrites a good manifest" % path)
+    # manifest is None with err set (malformed/oversized/unreadable/not-an-
+    # object) - the file exists but cannot be used.
+    ts = wslib.iso_now().replace(":", "").replace("-", "")
+    backup = "%s.corrupt-%s" % (path, ts)
+    if dry_run:
+        return path, backup, err
+    os.replace(path, backup)
+    try:
+        create_manifest(vault, born_session, name, focus, spawned_from,
+                        spawned_from_session, root=root)
+    except BaseException:
+        os.replace(backup, path)   # restore the corrupt original on any failure
+        raise
+    return path, backup, err
 
 
 def read(vault, born_session, root=None):
@@ -435,6 +476,14 @@ def main(argv):
     p_create.add_argument("--spawned-from-session")
     p_create.add_argument("--dry-run", action="store_true", dest="dry_run")
 
+    p_repair = sub.add_parser("repair")
+    p_repair.add_argument("born_session")
+    p_repair.add_argument("--name", required=True)
+    p_repair.add_argument("--focus", default="")
+    p_repair.add_argument("--spawned-from")
+    p_repair.add_argument("--spawned-from-session")
+    p_repair.add_argument("--dry-run", action="store_true", dest="dry_run")
+
     p_set = sub.add_parser("set")
     p_set.add_argument("born_session")
     p_set.add_argument("field")
@@ -486,6 +535,19 @@ def main(argv):
                                    args.spawned_from, args.spawned_from_session,
                                    dry_run=args.dry_run)
             print("manifest: %s%s" % ("DRY-RUN: would create " if args.dry_run else "created ", path))
+            return 0
+
+        if args.cmd == "repair":
+            path, backup, err = repair_manifest(vault, args.born_session, args.name,
+                                                args.focus, args.spawned_from,
+                                                args.spawned_from_session,
+                                                dry_run=args.dry_run)
+            if args.dry_run:
+                print("manifest: DRY-RUN: would move malformed %s (%s) aside to %s "
+                      "and write a fresh canonical manifest" % (path, err, backup))
+            else:
+                print("manifest: repaired %s (moved malformed original [%s] aside to %s)"
+                      % (path, err, backup))
             return 0
 
         if args.cmd == "set":
