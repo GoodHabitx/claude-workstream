@@ -198,9 +198,14 @@ To roll back a bad install: disable the plugin in `settings.json`
 (`enabledPlugins`) and restart - no hook it ships holds a lock or leaves a
 half-written file (every write goes through
 `workstream_lib.atomic_write_lf`/`atomic_write_json`, tmp+`os.replace`).
-Nothing here deletes vault content, so disabling is always sufficient;
-there is no data migration to reverse (see `docs/migration.md` - the 42
-existing workstream dirs never moved).
+Nothing here deletes vault content, so disabling is always sufficient to
+stop it. One data migration DOES run, and 0.1.4 is where it starts: a
+bound session's first SessionStart replaces a `ballast.json` still
+holding the 0.1.1 default with the 0.1.2 one (a customized scope is never
+touched). `docs/migration.md`, section "0.1.4 - the scope-default
+migration", names every key that changes, which scopes are eligible, and
+the `git checkout` that reverses it. The workstream dirs themselves never
+moved.
 
 ## Memory home
 

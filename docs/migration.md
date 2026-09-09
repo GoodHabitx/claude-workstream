@@ -148,3 +148,60 @@ The principal moved the tree: `staff/cos/workstreams` -> `.vault-meta/workstream
   ratified model has no such field; `scope` only exists as a per-peer key
   inside `collaborate[]`. Doc-only fix; `docs/workstream-model.md` carried
   the same phantom "gains ...scope" wording and is corrected too.
+
+## 0.1.4 - the scope-default migration (the one thing to undo)
+
+This IS a data migration, unlike everything above it on this page: 0.1.4
+rewrites `ballast.json` files that already exist in the vault. It is
+named here because the Rollback section of the README sends you here to
+find out what a rollback has to reverse.
+
+**What runs.** `ensure_scope()` in `scripts/ballast-dispatch.py`, on the
+SessionStart of each BOUND session, for that session's own scope only -
+lazily, one directory at a time, never a sweep. A workstream whose
+session never boots again is never touched.
+
+**Which scopes are eligible.** Exactly those whose `ballast.json` is
+byte-identical to the 0.1.1 default this wrapper itself used to write
+(held verbatim as `OLD_DEFAULT_SCOPE_TEXT` in that file, CRLF-normalized
+before comparison). Those bytes mean the file was written by the wrapper
+and never edited by anyone, so replacing them loses no choice a person
+made. **Anything else - a raised cap, a dropped file class, a
+hand-written scope - is left untouched**, and `/workstream:status` prints
+its caps so the owner can see what it is still running on.
+
+**What changes**, old -> new (ballast 0.1.2's
+`fixtures/scope-example/ballast.json`, copied verbatim):
+
+| key | 0.1.1 default | 0.1.4 default |
+|---|---|---|
+| `hot_cap_bytes` | 1024 | 4096 |
+| `glossary` | absent | `glossary.md` |
+| `playbook` | absent | `playbook.md` |
+| `glossary_cap_bytes` | absent | 4096 |
+| `playbook_inject_cap_bytes` | absent | 2048 |
+| `playbook_file_warn_bytes` | absent | 16384 |
+
+Everything else (`root`, `log`, `hot`, `index`, `policy`, `regen`,
+`policy_cap_bytes`, the nine `required_slots`, `significant_write_rule`,
+`reground_interval_turns`, `min_engine`) is unchanged. A scope with no
+`ballast.json` at all gets the same new default written fresh - a
+creation, not a migration.
+
+**Measured against the live state root, 2026-09-08** (43 workstream
+dirs): 23 hold the 0.1.1 default byte-for-byte and will be REWRITTEN, 20
+have no `ballast.json` and will have one CREATED, 0 are customized. So
+the first post-install boots touch 23 existing files.
+
+**The undo.** Each write is atomic (tmp + `os.replace`), and the state
+root is git-tracked and auto-committed, so the previous bytes are in
+history:
+
+```
+git -C <vault> log --oneline -- .vault-meta/workstreams/*/ballast.json
+git -C <vault> checkout <commit-before> -- .vault-meta/workstreams/<born_session>/ballast.json
+```
+
+Disabling the plugin stops further rewrites, but does not restore the 23
+already replaced - that is what the `git checkout` above is for. Nothing
+else this plugin writes needs reversing.
