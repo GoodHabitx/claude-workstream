@@ -8,27 +8,27 @@ persona-less plugin (04-workstreams-plugin.md and its component pages,
 
 This repo ships the **core** - identity primitives, lifecycle-writing
 primitives, the boot/remind/precompact hooks, the fleet-views generator,
-and the Ballast wiring - plus **16 verb skills**: the twelve built against
+and the Ballast wiring - plus **15 verb skills**: the twelve built against
 that core (`adopt · fork · refocus · close · absorb · notify · list ·
 graph · connect · manifest · policy · sidecar`), the read-only `status`,
-and three vendored from Ballast's own templates (`global-policy ·
-glossary · playbook`; `policy` is vendored too). See
+and the ones vendored from Ballast's own templates (`policy ·
+global-policy · glossary`). See
 `docs/dependencies.md` and each script's own module docstring.
 
 ## 0.1.4 changes
 
 Against Ballast 0.1.2 as shipped:
 
-- **SessionStart splits per part.** `hot`, `policy`, `glossary`,
-  `playbook` each ride their own hook command, because the harness caps
-  each command's stdout independently at 9,687 B; four parts on one
-  command would share one envelope and defeat it. A fifth command
+- **SessionStart splits per part.** `hot`, `policy`, `glossary`
+  each ride their own hook command, because the harness caps
+  each command's stdout independently at 9,687 B; three parts on one
+  command would share one envelope and defeat it. A fourth command
   delivers the **global scope** (`--part policy --scope-kind global`),
   silent until an operator seeds `<state_root>/_global/`.
 - **A PreToolUse entry** on `Write|Edit|NotebookEdit`, carrying two
   refusals: `ballast-dispatch.py`'s own (a direct write of any
   `workstream.json` under the state root) and Ballast's approval gate for
-  the four gated files. The wrapper now returns the shim's exit code
+  the three gated files. The wrapper now returns the shim's exit code
   VERBATIM - without that, a refusal reads as an allow and the entry is
   wired but inert.
 - **The manifest gate covers four fields.** `maintains`, `direct_report`,
@@ -40,8 +40,8 @@ Against Ballast 0.1.2 as shipped:
   0.1.2's `fixtures/scope-example/ballast.json` verbatim; an existing one
   still byte-identical to the 0.1.1 default is replaced with it. A
   customized scope is never touched.
-- **Four vendored skills** (`policy`, `global-policy`, `glossary`,
-  `playbook`) and the new read-only **`/workstream:status`**.
+- **Three vendored skills** (`policy`, `global-policy`, `glossary`) and
+  the new read-only **`/workstream:status`**.
 - **A whole-output bound** on `boot.py`, `remind.py` and `precompact.py`.
 - `shim/ballast-shim.py` re-copied byte-identical from Ballast 0.1.2.
 
@@ -67,7 +67,7 @@ Against Ballast 0.1.2 as shipped:
   plus the ONE sanctioned cross-manifest write (`absorb-close`,
   AB1-AB7), vault-lock-wrapped when vault-lock is available.
 - `scripts/status.py` - the read-only artifact printer behind
-  `/workstream:status`: the six files, each with its size against its cap
+  `/workstream:status`: the five files, each with its size against its cap
   (hot.md also per-slot), then the contents verbatim. Never writes,
   never interprets.
 - `scripts/boot.py` - `SessionStart` (no matcher - fires on every source
@@ -86,7 +86,7 @@ Against Ballast 0.1.2 as shipped:
 - `docs/dependencies.md`, `docs/migration.md`, `docs/workstream-model.md`.
 
 No `agents/` directory and no persona fields (`tier`/`model`/`home`) in
-the manifest - hooks plus primitives plus 16 skills, contributed the way
+the manifest - hooks plus primitives plus 15 skills, contributed the way
 `vault-lock`/`grill` are, never a persona a session talks to.
 
 ## Why this exists
@@ -122,7 +122,7 @@ someone else's 22-37 KB payload.
 
 ## Continuity is Ballast's, not this plugin's
 
-`hot.md`/`log.md`/`policy.md`/`glossary.md`/`playbook.md`/`index.md`
+`hot.md`/`log.md`/`policy.md`/`glossary.md`/`index.md`
 inside each workstream's own dir are a **Ballast scope** (B1-B5), and
 `<state_root>/_global/` is a second, shared one every bound session reads
 on top of its own. Because this plugin owns *many* scopes -

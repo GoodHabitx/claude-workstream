@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Structural tests for skills/ — the four VENDORED ballast templates and
+"""Structural tests for skills/ — the three VENDORED ballast templates and
 the shape every skill in this plugin has to keep.
 
-The vendored four (policy, global-policy, playbook, glossary) are copies
+The vendored three (policy, global-policy, glossary) are copies
 of ballast's `templates/skills/<name>/SKILL.md`, kept in step by ballast's
 own `sync-templates.py --check`. That check needs the ballast repo
 alongside this one, so it is an acceptance step rather than a test here;
@@ -18,7 +18,7 @@ import unittest
 PLUGIN_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 SKILLS = os.path.join(PLUGIN_ROOT, "skills")
 
-VENDORED = ("policy", "global-policy", "playbook", "glossary")
+VENDORED = ("policy", "global-policy", "glossary")
 EXTRAS_MARKER = "<!-- consumer-extras -->"
 TEMPLATE_MARKER_RE = re.compile(r"^<!-- ballast-template: ([a-z-]+) v\d+ -->$",
                                 re.MULTILINE)
@@ -28,7 +28,7 @@ TEMPLATE_MARKER_RE = re.compile(r"^<!-- ballast-template: ([a-z-]+) v\d+ -->$",
 # the check.
 EXPECTED_SKILLS = (
     "absorb", "adopt", "close", "connect", "fork", "glossary", "global-policy",
-    "graph", "list", "manifest", "notify", "playbook", "policy", "refocus",
+    "graph", "list", "manifest", "notify", "policy", "refocus",
     "sidecar", "status",
 )
 

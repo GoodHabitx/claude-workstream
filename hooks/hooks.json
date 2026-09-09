@@ -42,15 +42,6 @@
           {
             "type": "command",
             "timeout": 10,
-            "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/ballast-dispatch.py\" SessionStart \"${CLAUDE_PLUGIN_ROOT}\" --part playbook; fi; done; exit 0"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "timeout": 10,
             "command": "for c in python3 python \"py -3\" py; do if $c -c 'import sys;sys.exit(0)' >/dev/null 2>&1; then exec $c \"${CLAUDE_PLUGIN_ROOT}/scripts/ballast-dispatch.py\" SessionStart \"${CLAUDE_PLUGIN_ROOT}\" --part policy --scope-kind global; fi; done; exit 0"
           }
         ]

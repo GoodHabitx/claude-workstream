@@ -77,10 +77,8 @@ under this plugin's own namespace** (`/workstream:<verb>`):
   `fixtures/scope-global/ballast.json` plus an EMPTY `global-policy.md`)
   when it does not exist yet.
 - `glossary` — add, edit or delete a term in `glossary.md`. Vendored.
-- `playbook` — add, edit or delete a `when:`-triggered recipe in
-  `playbook.md`; only matched entries inject. Vendored.
-- `status` — print this workstream's six artifacts (manifest, hot,
-  policy, global-policy, glossary, playbook), each with its byte count
+- `status` — print this workstream's five artifacts (manifest, hot,
+  policy, global-policy, glossary), each with its byte count
   against its cap and hot.md with its per-slot lengths, then the contents
   VERBATIM. Read-only, no interpretation. Backed by `scripts/status.py`.
 - `sidecar` — the self-healing binding primitive. Backed by
@@ -404,7 +402,7 @@ wiki node, no vault-side storage at all.
 - `<state_root>/<born_session>/workstream.json` — **the manifest,
   durable, git-tracked**: the record of truth. See the schema below.
 - `<state_root>/<born_session>/hot.md` / `log.md` / `policy.md` /
-  `glossary.md` / `playbook.md` / `index.md` — **Ballast's six classes**,
+  `glossary.md` / `index.md` — **Ballast's five classes**,
   per its own scope declaration
   (`<state_root>/<born_session>/ballast.json`, auto-created by
   `ballast-dispatch.py` on first use — see "Policy layer," below, and
@@ -470,8 +468,8 @@ working limit.
 Six more hook commands, all through the one wrapper, which resolves which
 `ballast.json` applies and execs the byte-identical shim:
 
-- **SessionStart × 5** — `--part hot`, `--part policy`, `--part glossary`,
-  `--part playbook`, each on its OWN command because the harness caps each
+- **SessionStart × 4** — `--part hot`, `--part policy`, `--part glossary`,
+  each on its OWN command because the harness caps each
   command's stdout independently; plus `--part policy --scope-kind global`
   for the shared `_global/` scope. Ordering between parts is not
   guaranteed and nothing depends on it — every block self-identifies by
@@ -479,14 +477,14 @@ Six more hook commands, all through the one wrapper, which resolves which
 - **UserPromptSubmit** — Ballast's re-ground, listed ABOVE `remind.py` on
   that slot (X4).
 - **PostToolUse** — the log-append + index regen.
-- **PreCompact** — hot.md + the delta only. Neither policy.md, glossary.md
-  nor playbook.md rides the summarizer; each re-injects at the
+- **PreCompact** — hot.md + the delta only. Neither policy.md nor
+  glossary.md rides the summarizer; each re-injects at the
   compact-source SessionStart.
 - **Stop** — Ballast's freshness/completion gate.
 - **PreToolUse** (`Write|Edit|NotebookEdit`) — two refusals, in order:
   this wrapper's own (a direct write of any `workstream.json` under the
   state root — manifests go through `scripts/manifest.py`), then
-  Ballast's approval gate for policy.md / global-policy.md / playbook.md /
+  Ballast's approval gate for policy.md / global-policy.md /
   glossary.md.
 
 Both refusals are the hook protocol's exit 2 with the reason on stderr,

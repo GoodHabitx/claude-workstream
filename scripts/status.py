@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """status.py [ARTIFACT] [--born-session ID | --session TRANSCRIPT_ID] -
-print a workstream's six artifacts, their sizes against their caps, and
+print a workstream's five artifacts, their sizes against their caps, and
 their contents VERBATIM.
 
-The six, in this order: `manifest` (workstream.json), `hot` (hot.md),
+The five, in this order: `manifest` (workstream.json), `hot` (hot.md),
 `policy` (policy.md), `global-policy` (the shared
-`<state-root>/_global/global-policy.md`), `glossary` (glossary.md),
-`playbook` (playbook.md). No argument prints all six; one argument prints
-that one. A file that does not exist prints `absent`; a file field the
-scope sets to `null` prints `disabled`.
+`<state-root>/_global/global-policy.md`), `glossary` (glossary.md). No
+argument prints all five; one argument prints that one. A file that does
+not exist prints `absent`; a file field the scope sets to `null` prints
+`disabled`.
 
 This script PRINTS. It does not summarize, rank, diagnose or advise, and
 it never writes. Everything it emits is either read from a file or
@@ -36,31 +36,28 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import workstream_lib as wslib
 
-ARTIFACTS = ("manifest", "hot", "policy", "global-policy", "glossary", "playbook")
+ARTIFACTS = ("manifest", "hot", "policy", "global-policy", "glossary")
 
 GLOBAL_DIRNAME = "_global"
 
 # ballast.json's own documented defaults (docs/ballast.json.md), used only
 # when the scope does not declare the key - an un-migrated 0.1.1 scope
-# declares neither glossary nor playbook, and seeing that is the point.
+# declares no glossary, and seeing that is the point.
 DEFAULT_FILENAMES = {
     "hot": "hot.md",
     "policy": "policy.md",
     "glossary": "glossary.md",
-    "playbook": "playbook.md",
 }
 DEFAULT_CAPS = {
     "hot_cap_bytes": 4096,
     "policy_cap_bytes": 7168,
     "glossary_cap_bytes": 4096,
-    "playbook_file_warn_bytes": 16384,
 }
 CAP_KEY = {
     "hot": "hot_cap_bytes",
     "policy": "policy_cap_bytes",
     "global-policy": "policy_cap_bytes",
     "glossary": "glossary_cap_bytes",
-    "playbook": "playbook_file_warn_bytes",
 }
 
 # A runaway file must never be slurped whole into memory, cap or no cap.

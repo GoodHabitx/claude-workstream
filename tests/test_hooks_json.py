@@ -5,7 +5,7 @@ A hooks.json is the one file in this plugin nothing else exercises: a
 dropped `--part`, a global delivery accidentally wired to Stop, or a
 PreToolUse entry that never got added are all silent at runtime (the
 plugin simply does less than it says). So this file enumerates EXACTLY
-the entries the 0.1.4 wiring declares - event, matcher, script and the
+the entries the 0.1.5 wiring declares - event, matcher, script and the
 argv after `${CLAUDE_PLUGIN_ROOT}` - and fails on any drift in either
 direction.
 
@@ -31,7 +31,6 @@ EXPECTED = [
     ("SessionStart", None, "ballast-dispatch.py", "SessionStart --part hot"),
     ("SessionStart", None, "ballast-dispatch.py", "SessionStart --part policy"),
     ("SessionStart", None, "ballast-dispatch.py", "SessionStart --part glossary"),
-    ("SessionStart", None, "ballast-dispatch.py", "SessionStart --part playbook"),
     ("SessionStart", None, "ballast-dispatch.py",
      "SessionStart --part policy --scope-kind global"),
     ("UserPromptSubmit", None, "ballast-dispatch.py", "UserPromptSubmit"),
@@ -101,12 +100,12 @@ class HooksJsonTests(unittest.TestCase):
             if "--scope-kind global" in (args or ""):
                 self.assertEqual(event, "SessionStart")
 
-    def test_the_four_sessionstart_parts_are_each_wired_once(self):
+    def test_the_three_sessionstart_parts_are_each_wired_once(self):
         parts = [args.split("--part ")[1].split()[0]
                  for event, _m, script, args in flatten(load())
                  if event == "SessionStart" and script == "ballast-dispatch.py"
                  and "--part " in args and "--scope-kind" not in args]
-        self.assertEqual(sorted(parts), ["glossary", "hot", "playbook", "policy"])
+        self.assertEqual(sorted(parts), ["glossary", "hot", "policy"])
 
     def test_each_sessionstart_part_is_its_own_hook_command(self):
         """The split exists because the harness caps EACH hook command's

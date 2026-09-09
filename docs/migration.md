@@ -170,17 +170,14 @@ made. **Anything else - a raised cap, a dropped file class, a
 hand-written scope - is left untouched**, and `/workstream:status` prints
 its caps so the owner can see what it is still running on.
 
-**What changes**, old -> new (ballast 0.1.2's
+**What changes**, old -> new (ballast 0.1.3's
 `fixtures/scope-example/ballast.json`, copied verbatim):
 
-| key | 0.1.1 default | 0.1.4 default |
+| key | 0.1.1 default | new default |
 |---|---|---|
 | `hot_cap_bytes` | 1024 | 4096 |
 | `glossary` | absent | `glossary.md` |
-| `playbook` | absent | `playbook.md` |
 | `glossary_cap_bytes` | absent | 4096 |
-| `playbook_inject_cap_bytes` | absent | 2048 |
-| `playbook_file_warn_bytes` | absent | 16384 |
 
 Everything else (`root`, `log`, `hot`, `index`, `policy`, `regen`,
 `policy_cap_bytes`, the nine `required_slots`, `significant_write_rule`,

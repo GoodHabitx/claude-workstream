@@ -1,6 +1,6 @@
 ---
 name: global-policy
-description: Edit global-policy.md, the ONE rules file every workstream reads at boot, through Ballast's approval gate - show Adam the exact text, say plainly that it is global, wait for his yes, mint, then let the primitive write. Trigger on "add a global rule", "every workstream should...". Do NOT use for one workstream's own rules (that is policy), a glossary entry, or a playbook recipe.
+description: Edit global-policy.md, the ONE rules file every workstream reads at boot, through Ballast's approval gate - show Adam the exact text, say plainly that it is global, wait for his yes, mint, then let the primitive write. Trigger on "add a global rule", "every workstream should...". Do NOT use for one workstream's own rules (that is policy) or a glossary entry.
 ---
 <!-- ballast-template: global-policy v1 -->
 
@@ -52,8 +52,7 @@ the consumer's own and survives a re-sync.
 ## Not this skill's job
 
 - One workstream's own standing rules: `policy.md`, its own verb.
-- A term definition (`glossary.md`) or a situational recipe
-  (`playbook.md`).
+- A term definition (`glossary.md`), its own verb.
 - Wiring the global scope to Stop or PreCompact: SessionStart only — see
   the global-scope recipe in Ballast's `docs/ballast.json.md` for why.
 

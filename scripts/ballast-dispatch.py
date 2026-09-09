@@ -17,10 +17,10 @@ never modified here.
 
 Arguments
 ---------
-`--part NAME` is forwarded to the shim untouched (ballast 0.1.2's
-SessionStart split: `hot` / `policy` / `glossary` / `playbook`, default
-`all`). Omitted here means omitted there, which is how an un-updated hook
-line keeps its pre-split behavior.
+`--part NAME` is forwarded to the shim untouched (ballast's SessionStart
+split: `hot` / `policy` / `glossary`, default `all`). Omitted here means
+omitted there, which is how an un-updated hook line keeps its pre-split
+behavior.
 
 `--scope-kind global` points the invocation at the SHARED scope,
 `<state-root>/_global/ballast.json` (global-policy.md - the rules every
@@ -55,9 +55,9 @@ Unbound sessions (no sidecar, or born_session doesn't resolve to an
 existing dir - the common case for most sessions/most turns): near-zero-
 cost no-op, exit 0, no output, no ballast invocation at all - with ONE
 exception, PreToolUse. Ballast's approval gate protects FILES under the
-state root (policy.md, global-policy.md, playbook.md, glossary.md), not
+state root (policy.md, global-policy.md, glossary.md), not
 sessions, and this plugin is the only consumer that wires it: an unbound
-session skipping the gate would leave those four files guarded in name
+session skipping the gate would leave those files guarded in name
 only against the very population the docstring above calls the common
 case. So on PreToolUse alone, when this session is unbound and the write
 TARGETS a path under the state root, the scope is resolved from that
@@ -82,7 +82,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import workstream_lib as wslib
 
-# Verbatim copy of ballast 0.1.2's fixtures/scope-example/ballast.json
+# Verbatim copy of ballast 0.1.3's fixtures/scope-example/ballast.json
 # (docs/ballast.json.md prints the same text as its Example) - the
 # workstream scope IS the documented default scope, since 02/04g's hot
 # required_slots are exactly the nine names ballast.json already defaults
@@ -95,13 +95,10 @@ DEFAULT_SCOPE_TEXT = """{
   "index": "index.md",
   "policy": "policy.md",
   "glossary": "glossary.md",
-  "playbook": "playbook.md",
   "regen": null,
   "hot_cap_bytes": 4096,
   "policy_cap_bytes": 7168,
   "glossary_cap_bytes": 4096,
-  "playbook_inject_cap_bytes": 2048,
-  "playbook_file_warn_bytes": 16384,
   "required_slots": [
     "focus", "next", "blocked", "updated",
     "done", "looping", "progressing", "who-acts-next", "stall"

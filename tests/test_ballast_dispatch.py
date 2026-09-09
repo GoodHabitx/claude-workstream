@@ -139,7 +139,7 @@ class BallastDispatchFakeShimTests(unittest.TestCase):
 
 
 class BallastDispatchScopeMigrationTests(unittest.TestCase):
-    """B3: the default a first dispatch writes is ballast 0.1.2's
+    """B3: the default a first dispatch writes is ballast 0.1.3's
     fixtures/scope-example/ballast.json verbatim, and a scope still holding
     the 0.1.1 default byte-for-byte is replaced with it. Anything else is a
     decision somebody made and is never overwritten."""
@@ -178,12 +178,18 @@ class BallastDispatchScopeMigrationTests(unittest.TestCase):
 
     def test_first_write_is_the_new_default_verbatim(self):
         self._dispatch()
+        # Byte-exact against the constant, so the retired-recipe keys are
+        # gone by construction: the written scope must equal a constant that
+        # no longer carries them, not merely parse.
         self.assertEqual(self._read(), dispatch_mod.DEFAULT_SCOPE_TEXT)
         scope = json.loads(self._read())
         self.assertEqual(scope["hot_cap_bytes"], 4096)
         self.assertEqual(scope["glossary"], "glossary.md")
-        self.assertEqual(scope["playbook"], "playbook.md")
-        self.assertEqual(scope["playbook_inject_cap_bytes"], 2048)
+        self.assertEqual(sorted(scope.keys()), [
+            "glossary", "glossary_cap_bytes", "hot", "hot_cap_bytes", "index",
+            "log", "min_engine", "policy", "policy_cap_bytes", "regen",
+            "reground_interval_turns", "required_slots", "root",
+            "significant_write_rule"])
 
     def test_an_untouched_old_default_is_migrated(self):
         wslib.atomic_write_lf(self.scope_path, dispatch_mod.OLD_DEFAULT_SCOPE_TEXT)
@@ -230,7 +236,7 @@ class BallastDispatchPartTests(unittest.TestCase):
         shutil.rmtree(self.fake_root, ignore_errors=True)
 
     def test_part_is_forwarded_verbatim(self):
-        for part in ("hot", "policy", "glossary", "playbook"):
+        for part in ("hot", "policy", "glossary"):
             proc = run_dispatch(self.vault, "SessionStart", self.fake_root,
                                 json.dumps({"session_id": "sess-p"}),
                                 extra=("--part", part))

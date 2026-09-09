@@ -1,6 +1,6 @@
 ---
 name: status
-description: Print this workstream's six artifacts exactly as they are on disk — manifest, hot, policy, global-policy, glossary, playbook — each with its byte count against its cap, hot.md with its per-slot lengths, then the contents verbatim. Read-only, no summary. Trigger on "workstream status", "show my hot state", "what is in my policy", "how close to the cap". Do NOT use to change any of them (each has its own gated verb) or to roll-call other workstreams (workstream:list).
+description: Print this workstream's five artifacts exactly as they are on disk — manifest, hot, policy, global-policy, glossary — each with its byte count against its cap, hot.md with its per-slot lengths, then the contents verbatim. Read-only, no summary. Trigger on "workstream status", "show my hot state", "what is in my policy", "how close to the cap". Do NOT use to change any of them (each has its own gated verb) or to roll-call other workstreams (workstream:list).
 ---
 
 # Workstream status
@@ -36,7 +36,7 @@ trusted to describe it.
    python3 ${CLAUDE_PLUGIN_ROOT}/scripts/status.py [artifact] --session <session_id>
    ```
    `artifact` is one of `manifest`, `hot`, `policy`, `global-policy`,
-   `glossary`, `playbook`. With no argument all six print, in that order.
+   `glossary`. With no argument all five print, in that order.
    `--born-session <born_session>` targets a workstream directly instead
    of resolving a session, which is how to look at one that is closed.
 
@@ -48,9 +48,8 @@ trusted to describe it.
 
 ## What the output means
 
-- **`absent`** — the file does not exist. Normal for `glossary.md`,
-  `playbook.md` and `global-policy.md`, which are created only when
-  something earns an entry.
+- **`absent`** — the file does not exist. Normal for `glossary.md` and
+  `global-policy.md`, which are created only when something earns an entry.
 - **`disabled`** — the scope's `ballast.json` sets that class to `null`.
   A decision, not an absence.
 - **`no ballast.json at this scope`** — nothing has run a SessionStart
@@ -68,11 +67,10 @@ trusted to describe it.
 
 ## Not this skill's job
 
-- Changing any of the six: `policy.md` → `workstream:policy`,
+- Changing any of the five: `policy.md` → `workstream:policy`,
   `global-policy.md` → `workstream:global-policy`, `glossary.md` →
-  `workstream:glossary`, `playbook.md` → `workstream:playbook`,
-  `workstream.json` → `workstream:manifest`. `hot.md` is the session's
-  own to refresh, on Ballast's cadence.
+  `workstream:glossary`, `workstream.json` → `workstream:manifest`.
+  `hot.md` is the session's own to refresh, on Ballast's cadence.
 - Looking at ANOTHER workstream's live state: this prints files, and a
   closed workstream's files are the whole story, but a live peer's
   current state lives in its own session — `workstream:notify` it.

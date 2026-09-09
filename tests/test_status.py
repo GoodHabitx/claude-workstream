@@ -100,7 +100,7 @@ class StatusTests(unittest.TestCase):
 
     def scope(self, **overrides):
         data = {"root": ".", "hot": "hot.md", "policy": "policy.md",
-                "glossary": "glossary.md", "playbook": "playbook.md"}
+                "glossary": "glossary.md"}
         data.update(overrides)
         wslib.atomic_write_json(os.path.join(self.ws_dir, "ballast.json"), data)
 
@@ -112,27 +112,27 @@ class StatusTests(unittest.TestCase):
                               + list(args), cwd=self.vault, capture_output=True,
                               text=True)
 
-    # --- the six -------------------------------------------------------
-    def test_all_six_artifacts_print_in_order(self):
+    # --- the five ------------------------------------------------------
+    def test_all_five_artifacts_print_in_order(self):
         out = self.build()
         headings = [line for line in out.splitlines() if line.startswith("### ")]
         self.assertEqual([h.split(" - ")[0] for h in headings],
                          ["### manifest", "### hot", "### policy",
-                          "### global-policy", "### glossary", "### playbook"])
+                          "### global-policy", "### glossary"])
 
     def test_one_argument_prints_only_that_artifact(self):
         self.write("policy.md", "# Policy\n\n- one rule\n")
         out = self.build(only="policy")
         self.assertIn("### policy", out)
-        for other in ("### hot", "### manifest", "### glossary", "### playbook",
+        for other in ("### hot", "### manifest", "### glossary",
                       "### global-policy"):
             self.assertNotIn(other, out)
 
     def test_a_missing_file_prints_absent(self):
         out = self.build()
         # only the manifest exists in this fixture
-        self.assertEqual(out.count("absent"), 5)
-        for name in ("hot", "policy", "glossary", "playbook"):
+        self.assertEqual(out.count("absent"), 4)
+        for name in ("hot", "policy", "glossary"):
             block = out.split("### %s" % name, 1)[1].split("###", 1)[0]
             self.assertIn("absent", block)
 
@@ -154,9 +154,8 @@ class StatusTests(unittest.TestCase):
                       self.build(only="policy"))
 
     def test_an_unmigrated_scope_falls_back_to_the_documented_defaults(self):
-        """A 0.1.1 scope declares neither glossary nor playbook; the
-        printer still names a cap, and says the key came from the
-        default."""
+        """A 0.1.1 scope declares no glossary; the printer still names a
+        cap, and says the key came from the default."""
         self.scope()
         self.write("glossary.md", "- **term** - gloss\n")
         self.assertIn("B cap (glossary_cap_bytes)", self.build(only="glossary"))

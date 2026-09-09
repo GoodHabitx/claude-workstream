@@ -1,6 +1,6 @@
 ---
 name: glossary
-description: Add, edit or delete a term in glossary.md, through Ballast's approval gate - show Adam the exact entry and the naming failure that justifies it, wait for his yes, mint, then let the primitive write. Trigger on "add a glossary entry", "we are using that word two ways". Do NOT use for standing rules (policy), a situational recipe (playbook), or to define a term nothing has actually confused.
+description: Add, edit or delete a term in glossary.md, through Ballast's approval gate - show Adam the exact entry and the naming failure that justifies it, wait for his yes, mint, then let the primitive write. Trigger on "add a glossary entry", "we are using that word two ways". Do NOT use for standing rules (policy) or to define a term nothing has actually confused.
 ---
 <!-- ballast-template: glossary v1 -->
 
@@ -54,7 +54,6 @@ contradicting a newer one is the real failure, not growth.
 ## Not this skill's job
 
 - Standing rules: `policy.md`, its own verb.
-- A situational recipe: `playbook.md`, its own verb.
 - Automatic pruning by how often a term appears: frequency alone evicts
   exactly the rare proper nouns and one-off coinages a glossary exists to
   protect. Entries come and go by judgment, with a reason.
@@ -83,9 +82,8 @@ and never a vault project/spine node.
 
 **What belongs here rather than elsewhere.** A term this workstream has
 actually seen used two ways - a name that collided, a coinage a later
-session will meet cold. Not a rule (that is `policy.md`), not a recipe
-(that is `playbook.md`), and not a duty (that is the manifest's
-`maintains[]`, through `workstream:manifest`).
+session will meet cold. Not a rule (that is `policy.md`), and not a duty
+(that is the manifest's `maintains[]`, through `workstream:manifest`).
 
 `/workstream:status glossary` prints the file and its byte count against
 `glossary_cap_bytes` before you add to it.

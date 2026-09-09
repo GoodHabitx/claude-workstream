@@ -1,6 +1,6 @@
 ---
 name: policy
-description: Edit this workstream's standing rules in policy.md, through Ballast's approval gate - show Adam the exact text, wait for his yes, mint the approval, then let the primitive write. Trigger on "add a policy", "change the standing rules", "this workstream should always...". Do NOT use for the shared rules every workstream reads (that is global-policy), for a glossary entry, or for a playbook recipe.
+description: Edit this workstream's standing rules in policy.md, through Ballast's approval gate - show Adam the exact text, wait for his yes, mint the approval, then let the primitive write. Trigger on "add a policy", "change the standing rules", "this workstream should always...". Do NOT use for the shared rules every workstream reads (that is global-policy) or for a glossary entry.
 ---
 <!-- ballast-template: policy v1 -->
 
@@ -48,8 +48,8 @@ the consumer's own and survives a re-sync.
 
 - The shared rules EVERY workstream reads: that is `global-policy.md`, a
   different file with a different scope and its own verb.
-- A term definition (`glossary.md`) or a situational recipe
-  (`playbook.md`) — each has its own gated verb and its own primitive.
+- A term definition (`glossary.md`) — its own gated verb and its own
+  primitive.
 - Writing `policy.md` by hand: the gate refuses it, and that is the point.
 
 <!-- consumer-extras -->
