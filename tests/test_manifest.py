@@ -112,6 +112,10 @@ def main(argv):
         if not directory:
             return 2
         os.makedirs(directory, exist_ok=True)
+        try:
+            os.unlink(os.path.join(directory, token_name(target)) + ".claimed")
+        except OSError:
+            pass
         with open(os.path.join(directory, token_name(target)), "w") as handle:
             json.dump({"minted": time.time(), "field": opts.get("field")}, handle)
         return 0
@@ -124,6 +128,15 @@ def main(argv):
         with open(path) as handle:
             age = time.time() - json.load(handle)["minted"]
         return 0 if 0 <= age <= TTL else 1
+    # consume: the CLAIM is an exclusive create beside the token, exactly as
+    # ballast_lib.consume_approval does it - a delete is not a claim (two
+    # racers can both succeed at deleting one file), so the loser of the
+    # claim is refused here with exit 1 and mint clears the marker.
+    try:
+        claim = os.open(path + ".claimed", os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except OSError:
+        return 1
+    os.close(claim)
     os.unlink(path)
     return 0
 
@@ -184,8 +197,17 @@ class GatedTestCase(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
 
     def token_count(self):
+        """Live tokens only - a spent token leaves its claim marker behind
+        (see STUB_APPROVE's consume), and ballast counts `*.token` too."""
         directory = os.path.join(self.state_root(), ".ballast-approvals")
-        return len(os.listdir(directory)) if os.path.isdir(directory) else 0
+        if not os.path.isdir(directory):
+            return 0
+        return len([n for n in os.listdir(directory) if n.endswith(".token")])
+
+    def token_path(self):
+        directory = os.path.join(self.state_root(), ".ballast-approvals")
+        return os.path.join(directory, sorted(
+            n for n in os.listdir(directory) if n.endswith(".token"))[0])
 
     def disarm_gate(self):
         open(os.path.join(self.state_root(), "ballast-gate.disabled"), "w").close()
@@ -553,6 +575,57 @@ class ApprovalGateTests(GatedTestCase):
         mprim.set_field(self.vault, "born-1", "maintains", ["one"], root=self.root)
         data, _ = wslib.read_manifest(self.vault, "born-1", self.root)
         self.assertEqual(data["maintains"], ["one"])
+
+
+class ApprovalClaimRaceTests(GatedTestCase):
+    """One approval, one write - including when two writers race for it.
+    The gate used to authorize on `check` and discard `consume`'s exit code,
+    so the writer that LOST the claim wrote anyway: one yes for a
+    `maintains` change also let a concurrent `collaborate` rewrite through,
+    which is exactly the org-chart rewiring the gate exists to prevent."""
+
+    def extra_setup(self):
+        mprim.create_manifest(self.vault, "born-r", "n", "f", root=self.root)
+
+    def test_a_lost_claim_refuses_the_write(self):
+        self.mint("born-r", "maintains")
+        open(self.token_path() + ".claimed", "w").close()   # a racer got there first
+        with self.assertRaises(PermissionError):
+            mprim.set_field(self.vault, "born-r", "maintains", ["[[a]]"], root=self.root)
+        data, _ = wslib.read_manifest(self.vault, "born-r", self.root)
+        self.assertEqual(data["maintains"], [])
+
+    def test_one_token_authorizes_exactly_one_of_two_gated_writes(self):
+        self.mint("born-r", "maintains")
+        mprim.set_field(self.vault, "born-r", "maintains", ["[[a]]"], root=self.root)
+        with self.assertRaises(PermissionError):
+            mprim.set_field(self.vault, "born-r", "collaborate",
+                            [{"name": "p", "session": "s"}], root=self.root)
+        data, _ = wslib.read_manifest(self.vault, "born-r", self.root)
+        self.assertEqual(data["maintains"], ["[[a]]"])
+        self.assertEqual(data["collaborate"], [])
+
+    def test_a_fresh_mint_clears_a_stale_claim(self):
+        """A new yes is a new approval: the previous claim must not stand in
+        front of it (ballast_lib.mint_approval clears it for the same
+        reason)."""
+        self.mint("born-r", "maintains")
+        open(self.token_path() + ".claimed", "w").close()
+        self.mint("born-r", "maintains")
+        mprim.set_field(self.vault, "born-r", "maintains", ["[[a]]"], root=self.root)
+        data, _ = wslib.read_manifest(self.vault, "born-r", self.root)
+        self.assertEqual(data["maintains"], ["[[a]]"])
+
+    def test_a_dry_run_neither_claims_nor_refuses_on_a_claim(self):
+        """A preview writes nothing, so it consumes nothing - and must not
+        start refusing just because a claim marker exists."""
+        self.mint("born-r", "maintains")
+        mprim.set_field(self.vault, "born-r", "maintains", ["[[a]]"],
+                        root=self.root, dry_run=True)
+        self.assertEqual(self.token_count(), 1)
+        mprim.set_field(self.vault, "born-r", "maintains", ["[[a]]"], root=self.root)
+        data, _ = wslib.read_manifest(self.vault, "born-r", self.root)
+        self.assertEqual(data["maintains"], ["[[a]]"])
 
 
 class ManifestCLITests(unittest.TestCase):

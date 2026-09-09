@@ -146,7 +146,15 @@ def require_approval(vault, born_session, field, root=None, consume=True):
     `consume=False` (a dry run) CHECKS the approval but does not spend it:
     a preview writes nothing, so it has nothing to consume, and leaving
     the token in place is what lets `--dry-run` be a real preview of the
-    write that follows."""
+    write that follows.
+
+    Otherwise the CONSUME is the authorization, not bookkeeping after one:
+    two gated writes racing on a single token both pass `check`, so only
+    the consume can pick between them. That is why ballast_lib's
+    `consume_approval` claims the token with an exclusive create and
+    ballast.py's own half of this gate refuses when the claim fails - this
+    half, the second, refuses on the same signal, so one yes can never
+    authorize two writes."""
     manifest_path = wslib.manifest_path_for(vault, born_session, root)
     ws_dir = os.path.dirname(manifest_path)
     state_root = os.path.dirname(ws_dir)
@@ -164,12 +172,16 @@ def require_approval(vault, born_session, field, root=None, consume=True):
     if not os.path.isfile(scope_path):
         scope_path = None
 
+    refusal = NO_APPROVAL % (field, scope_path or "<the scope's ballast.json>",
+                             manifest_path, field)
     if _run_approve(approve_py, "check", manifest_path, scope_path) != 0:
-        raise PermissionError(NO_APPROVAL % (field, scope_path or
-                                             "<the scope's ballast.json>",
-                                             manifest_path, field))
-    if consume:
-        _run_approve(approve_py, "consume", manifest_path, scope_path)
+        raise PermissionError(refusal)
+    if consume and _run_approve(approve_py, "consume", manifest_path,
+                                scope_path) != 0:
+        # Another writer claimed this token between the check above and
+        # here (or it could not be claimed at all): this write has no
+        # approval left, and an unclaimable approval is never assumed.
+        raise PermissionError(refusal)
 
 
 def create_manifest(vault, born_session, name, focus, spawned_from=None,
