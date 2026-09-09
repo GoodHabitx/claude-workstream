@@ -304,11 +304,13 @@ class RepairManifestTests(unittest.TestCase):
 
     def test_repair_dry_run_touches_nothing(self):
         path = self._malform("born-d")
-        before = open(path, encoding="utf-8").read()
+        with open(path, encoding="utf-8") as fh:
+            before = fh.read()
         _p, backup, _err = mprim.repair_manifest(self.vault, "born-d", "ws-d",
                                                  root=self.root, dry_run=True)
         self.assertFalse(os.path.isfile(backup))
-        self.assertEqual(open(path, encoding="utf-8").read(), before)
+        with open(path, encoding="utf-8") as fh:
+            self.assertEqual(fh.read(), before)
 
 
 class SetFieldTests(GatedTestCase):
@@ -472,7 +474,9 @@ class AbsorbCloseTests(unittest.TestCase):
 
 
 class ApprovalGateTests(GatedTestCase):
-    """B2: the gate is FIELD-AWARE. The four fleet-reshaping fields need a
+    """B2: the gate covers four fields, and the approval is FILE-scoped (a
+    token authorizes the next gated write to the manifest, whichever field -
+    Ballast keys it by target path). The four fleet-reshaping fields need a
     fresh approval; everything else - above all the fields hooks write on
     a cadence, such as last_touched - is never gated, because gating one
     of those would fail every hook-driven manifest write in the vault."""
@@ -539,6 +543,7 @@ class ApprovalGateTests(GatedTestCase):
         field, so the approval is FILE-scoped. The refusal prints a mint
         command WITHOUT --field (a per-field scope the mechanism cannot
         deliver) and says the approval covers the file."""
+        self.scope_for("born-1")   # born-1 has its own scope -> the mint-command refusal
         with self.assertRaises(PermissionError) as caught:
             mprim.set_field(self.vault, "born-1", "maintains", ["x"], root=self.root)
         msg = str(caught.exception)
@@ -557,6 +562,44 @@ class ApprovalGateTests(GatedTestCase):
         self.assertEqual(self.token_count(), 0)     # one write, one token
         with self.assertRaises(PermissionError):    # a second gated write needs a second yes
             mprim.set_field(self.vault, "born-1", "maintains", ["x"], root=self.root)
+
+    def test_a_scope_less_dir_falls_back_to_a_sibling_scope_in_the_refusal(self):
+        """R0-4: born-1's own dir has no ballast.json (20 of the 43 live dirs
+        are like this), but a scope exists under the same state root. The
+        refusal must print a RUNNABLE mint command - a real --scope path and
+        the resolved approve.py path - never an angle-bracket placeholder,
+        so the gated write is actually authorizable."""
+        sibling = os.path.join(self.state_root(), "born-sibling", "ballast.json")
+        os.makedirs(os.path.dirname(sibling), exist_ok=True)
+        wslib.atomic_write_lf(sibling, '{"root": "."}\n')
+        own = os.path.join(self.state_root(), "born-1", "ballast.json")
+        self.assertFalse(os.path.isfile(own))   # born-1 is scope-less
+        with self.assertRaises(PermissionError) as caught:
+            mprim.set_field(self.vault, "born-1", "maintains", ["x"], root=self.root)
+        msg = str(caught.exception)
+        self.assertNotIn("<the scope", msg)
+        mint_line = [ln for ln in msg.splitlines() if "mint --scope" in ln][0]
+        self.assertNotIn("<", mint_line)              # no placeholder anywhere in the command
+        self.assertIn(sibling, mint_line)             # a real fallback scope
+        self.assertIn(self.approve_py, mint_line)     # the resolved approve.py, not a bare name
+
+    def test_a_scope_less_dir_with_a_sibling_scope_is_authorizable_end_to_end(self):
+        """R0-4: the fallback is not cosmetic - a token minted against the
+        sibling scope actually authorizes the write to the scope-less dir's
+        manifest (both resolve the same state root)."""
+        wslib.atomic_write_lf(
+            os.path.join(self.state_root(), "born-sibling", "ballast.json"),
+            '{"root": "."}\n')
+        # mint against the sibling scope, targeting born-1's manifest
+        proc = subprocess.run(
+            [sys.executable, self.approve_py, "mint",
+             "--scope", os.path.join(self.state_root(), "born-sibling", "ballast.json"),
+             "--file", wslib.manifest_path_for(self.vault, "born-1", self.root)],
+            capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        mprim.set_field(self.vault, "born-1", "maintains", ["ok"], root=self.root)
+        data, _ = wslib.read_manifest(self.vault, "born-1", self.root)
+        self.assertEqual(data["maintains"], ["ok"])
 
     def test_a_no_op_assignment_needs_no_approval(self):
         """Nothing changed, so there is nothing anyone could have reviewed -

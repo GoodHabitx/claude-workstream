@@ -91,11 +91,20 @@ NO_APPROVAL = (
     "manifest: %r is approval-gated and has no fresh approval.\n"
     "Show Adam the exact field change - the value now, the value after - "
     "wait for his explicit yes, then mint the one-time approval:\n"
-    "  approve.py mint --scope %s --file %s\n"
+    "  %s mint --scope %s --file %s\n"
     "and run this command again. The approval is scoped to this FILE, not "
     "to one field (Ballast keys the token by target path): it authorizes "
     "the next gated write to %s, is one-time, expires in minutes, and is "
     "consumed by that write."
+)
+
+NO_SCOPE = (
+    "manifest: %r is approval-gated, but there is no ballast scope "
+    "(a ballast.json) anywhere under the state root %s, so no approval can "
+    "be minted - approve.py mint needs a readable --scope to resolve the "
+    "state root. Let a bound session's SessionStart write its scope first, "
+    "or, if this vault runs without the gate, create %s under the state "
+    "root to disarm it. A gated field is never written unapproved."
 )
 
 BALLAST_ABSENT = (
@@ -148,6 +157,28 @@ def _run_approve(approve_py, action, target, scope_path):
         return None
 
 
+def _first_scope_under(state_root):
+    """The first existing `<state-root>/<dir>/ballast.json`, in sorted
+    directory order, or None - mirrors ballast-dispatch.py's
+    any_scope_under. Ballast's gate/mint read only the state root (the
+    parent of the scope's own directory) and the TTL from whatever scope
+    they are handed, so for a target under THIS state root every scope
+    under it resolves the same state root and answers the same. This just
+    needs SOME real scope, because approve.py mint requires a readable
+    --scope to resolve the state root, and 20 of the 43 live workstream
+    dirs have no ballast.json of their own. Creates nothing."""
+    try:
+        with os.scandir(state_root) as entries:
+            names = sorted(e.name for e in entries if e.is_dir())
+    except OSError:
+        return None
+    for name in names:
+        candidate = os.path.join(state_root, name, "ballast.json")
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
 def require_approval(vault, born_session, field, root=None, consume=True):
     """The gate every gated-field write passes through. Returns silently
     when the write is authorized; raises PermissionError with the exact
@@ -180,10 +211,21 @@ def require_approval(vault, born_session, field, root=None, consume=True):
 
     scope_path = os.path.join(ws_dir, "ballast.json")
     if not os.path.isfile(scope_path):
-        scope_path = None
+        # This dir has no ballast.json of its own (20 of the 43 live dirs).
+        # approve.py's `check` works from the bare --file, but `mint`
+        # REQUIRES a readable --scope to resolve the state root - so fall
+        # back to any existing scope under the SAME state root (they all
+        # resolve the same state root and TTL for a target under it). Never
+        # emit an angle-bracket placeholder as a command argument.
+        scope_path = _first_scope_under(state_root)
 
-    refusal = NO_APPROVAL % (field, scope_path or "<the scope's ballast.json>",
-                             manifest_path, manifest_path)
+    if scope_path:
+        refusal = NO_APPROVAL % (field, approve_py, scope_path,
+                                 manifest_path, manifest_path)
+    else:
+        # No scope anywhere under the state root - minting is impossible
+        # until one exists, so say exactly that instead of a placeholder.
+        refusal = NO_SCOPE % (field, state_root, GATE_DISABLED_FILENAME)
     if _run_approve(approve_py, "check", manifest_path, scope_path) != 0:
         raise PermissionError(refusal)
     if consume and _run_approve(approve_py, "consume", manifest_path,
