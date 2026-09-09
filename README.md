@@ -31,9 +31,11 @@ Against Ballast 0.1.2 as shipped:
   the four gated files. The wrapper now returns the shim's exit code
   VERBATIM - without that, a refusal reads as an allow and the entry is
   wired but inert.
-- **The manifest gate is field-aware.** `maintains`, `direct_report`,
+- **The manifest gate covers four fields.** `maintains`, `direct_report`,
   `collaborate` and `absorbed` need a fresh approval; every other field,
-  `last_touched` included, is untouched by it.
+  `last_touched` included, is untouched by it. The approval is scoped to
+  the manifest FILE, not to one field - Ballast keys a token by target
+  path, so one yes authorizes the next gated write to that manifest.
 - **Scope defaults + migration.** A new scope is written from Ballast
   0.1.2's `fixtures/scope-example/ballast.json` verbatim; an existing one
   still byte-identical to the 0.1.1 default is replaced with it. A
@@ -60,8 +62,8 @@ Against Ballast 0.1.2 as shipped:
   id -> `born_session`; writes, resolves, and SELF-HEALS (a missing/stale
   sidecar gets a loud line, never silence).
 - `scripts/manifest.py` - the manifest primitive (I3-I5): schema authority
-  for `workstream.json`, single-writer-per-manifest, the field-aware
-  approval gate (`maintains`/`direct_report`/`collaborate`/`absorbed`),
+  for `workstream.json`, single-writer-per-manifest, the file-scoped
+  approval gate over `maintains`/`direct_report`/`collaborate`/`absorbed`,
   plus the ONE sanctioned cross-manifest write (`absorb-close`,
   AB1-AB7), vault-lock-wrapped when vault-lock is available.
 - `scripts/status.py` - the read-only artifact printer behind

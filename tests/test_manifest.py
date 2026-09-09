@@ -475,6 +475,30 @@ class ApprovalGateTests(GatedTestCase):
         data, _ = wslib.read_manifest(self.vault, "born-1", self.root)
         self.assertEqual(data["maintains"], ["one"])
 
+    def test_the_refusal_gives_a_file_scoped_mint_command_with_no_field_flag(self):
+        """R0-2: Ballast keys a token by target path and never reads the
+        field, so the approval is FILE-scoped. The refusal prints a mint
+        command WITHOUT --field (a per-field scope the mechanism cannot
+        deliver) and says the approval covers the file."""
+        with self.assertRaises(PermissionError) as caught:
+            mprim.set_field(self.vault, "born-1", "maintains", ["x"], root=self.root)
+        msg = str(caught.exception)
+        self.assertIn("approve.py mint --scope", msg)
+        self.assertNotIn("--field", msg)
+        self.assertIn("scoped to this FILE", msg)
+
+    def test_a_token_authorizes_a_write_to_any_gated_field_then_is_spent(self):
+        """R0-2: the token is file-scoped, so one approval authorizes the
+        next gated write whatever field it touches - and only that one."""
+        self.mint("born-1", "maintains")            # minted for one field...
+        mprim.set_field(self.vault, "born-1", "direct_report",
+                        {"name": "up", "session": "s"}, root=self.root)  # ...spent by another
+        data, _ = wslib.read_manifest(self.vault, "born-1", self.root)
+        self.assertEqual(data["direct_report"], {"name": "up", "session": "s"})
+        self.assertEqual(self.token_count(), 0)     # one write, one token
+        with self.assertRaises(PermissionError):    # a second gated write needs a second yes
+            mprim.set_field(self.vault, "born-1", "maintains", ["x"], root=self.root)
+
     def test_a_no_op_assignment_needs_no_approval(self):
         """Nothing changed, so there is nothing anyone could have reviewed -
         and a hook re-writing an identical value must not start failing."""

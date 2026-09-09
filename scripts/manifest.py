@@ -19,10 +19,15 @@ L3) - create_manifest never writes them; set_field refuses to
 2026-09-07: an earlier draft of this docstring claimed one, but neither
 create_manifest nor SCHEMA_FIELDS ever implemented it.)
 
-The approval gate (B2), field-aware: a write that CHANGES `maintains`,
+The approval gate (B2): a write that CHANGES `maintains`,
 `direct_report`, `collaborate` or `absorbed` needs a fresh one-time
 approval token (Ballast's `approve.py` convention, resolved through
-`workstream_lib.ballast_script`), which it consumes. Those four reshape
+`workstream_lib.ballast_script`), which it consumes. The token is scoped
+to the manifest FILE, not to the individual field: Ballast keys a token by
+its target path alone, and its check/consume never read the field, so one
+approval authorizes the next gated write to this workstream.json until it
+is consumed - it is deliberately NOT a per-field pass, because the
+mechanism cannot deliver one. Those four reshape
 the fleet - who this workstream answers to, who it works with, what it
 owns, what it swallowed - and each shows up in another workstream's own
 graph, so an unreviewed edit silently rewires the org chart. EVERY other
@@ -64,7 +69,7 @@ import workstream_lib as wslib
 
 LEGACY_FIELDS = ("parents", "parent", "parent_session", "rebound")
 
-# --- the field-aware approval gate (B2) ------------------------------------
+# --- the approval gate (B2), FILE-scoped over four fields ------------------
 # The four fields whose change reshapes the FLEET rather than this one
 # workstream's own description of itself: who it answers to, who it works
 # with, what it owns, and what it swallowed. Each is read at every boot by
@@ -84,9 +89,11 @@ NO_APPROVAL = (
     "manifest: %r is approval-gated and has no fresh approval.\n"
     "Show Adam the exact field change - the value now, the value after - "
     "wait for his explicit yes, then mint the one-time approval:\n"
-    "  approve.py mint --scope %s --file %s --field %s\n"
-    "and run this command again. An approval is one-time, expires in "
-    "minutes, and is consumed by the write it authorizes."
+    "  approve.py mint --scope %s --file %s\n"
+    "and run this command again. The approval is scoped to this FILE, not "
+    "to one field (Ballast keys the token by target path): it authorizes "
+    "the next gated write to %s, is one-time, expires in minutes, and is "
+    "consumed by that write."
 )
 
 BALLAST_ABSENT = (
@@ -116,16 +123,17 @@ SCHEMA_FIELDS = {
 }
 
 
-def _run_approve(approve_py, action, target, scope_path, field=None):
+def _run_approve(approve_py, action, target, scope_path):
     """One `approve.py <action>` invocation. Returns its exit code, or None
     when it could not be run at all. `--scope` is passed when the scope
     file exists (it carries the state root and the TTL); a scope ballast
     itself refuses to load (exit 2, a usage/scope error) falls back to the
     bare `--file` form, so a malformed ballast.json degrades the gate to
-    its defaults instead of bricking every manifest write."""
+    its defaults instead of bricking every manifest write. No `--field` is
+    ever sent: Ballast keys a token by target path alone and never reads
+    the field, so the approval is FILE-scoped - passing a field would imply
+    a per-field scope the mechanism does not deliver."""
     argv = [sys.executable, approve_py, action, "--file", target]
-    if field and action == "mint":
-        argv += ["--field", field]
     try:
         if scope_path:
             proc = subprocess.run(argv + ["--scope", scope_path],
@@ -173,7 +181,7 @@ def require_approval(vault, born_session, field, root=None, consume=True):
         scope_path = None
 
     refusal = NO_APPROVAL % (field, scope_path or "<the scope's ballast.json>",
-                             manifest_path, field)
+                             manifest_path, manifest_path)
     if _run_approve(approve_py, "check", manifest_path, scope_path) != 0:
         raise PermissionError(refusal)
     if consume and _run_approve(approve_py, "consume", manifest_path,

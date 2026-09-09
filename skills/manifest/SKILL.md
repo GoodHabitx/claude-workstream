@@ -67,12 +67,16 @@ project/spine node.
       else, or a reply to a different question is not a yes.
    c. Mint the one-time approval:
       ```
-      approve.py mint --scope <ws_dir>/ballast.json --file <ws_dir>/workstream.json --field <field>
+      approve.py mint --scope <ws_dir>/ballast.json --file <ws_dir>/workstream.json
       ```
       (`approve.py` lives in the installed `ballast` plugin's `scripts/`;
-      `manifest.py` resolves it the same way, so run it from there.)
+      `manifest.py` resolves it the same way, so run it from there.) The
+      token is scoped to the FILE, not to one field — Ballast keys it by
+      target path and never reads the field — so mint it immediately
+      before the single gated write it is for, never in advance of a batch.
    d. Run the `manifest.py` command. It consumes the approval — one
-      approval, one write. A second write needs a second yes.
+      approval, one write, whichever gated field it touches. A second
+      gated write needs a second yes.
 
    No approval can be minted if `ballast` is not installed; the refusal
    says so and names the deliberate escape hatch
