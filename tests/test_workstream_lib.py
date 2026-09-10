@@ -251,10 +251,18 @@ class ManifestScanTests(unittest.TestCase):
 
 
 class DependencyDegradeTests(unittest.TestCase):
+    """The INSTALLED/fallback resolution chain. The real plugin tree now
+    carries vendor/ballast/, which ballast_script/ballast_available resolve
+    FIRST and which no env manipulation can hide, so neutralize the
+    vendored-first shortcut here; the vendored path has its own tests below."""
+
     def setUp(self):
         self._old_env = dict(os.environ)
+        self._orig_vendored = wslib._vendored_ballast_script
+        wslib._vendored_ballast_script = lambda name: None
 
     def tearDown(self):
+        wslib._vendored_ballast_script = self._orig_vendored
         os.environ.clear()
         os.environ.update(self._old_env)
 
@@ -398,6 +406,35 @@ class DependencyDegradeTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("refuses", message)
         self.assertIn("ballast", message)
+
+    # Vendored-first: the real plugin tree carries vendor/ballast/, so a
+    # self-contained install resolves ballast there before any installed
+    # copy. These restore the shortcut this class's setUp neutralizes.
+    def test_vendored_copy_makes_ballast_available(self):
+        wslib._vendored_ballast_script = self._orig_vendored
+        os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
+        os.environ["HOME"] = tempfile.mkdtemp(prefix="ws_home_")
+        os.environ.pop("USERPROFILE", None)
+        self.assertTrue(wslib.ballast_available())
+        script = wslib.ballast_script("approve.py")
+        self.assertIsNotNone(script)
+        self.assertIn(os.path.join("vendor", "ballast"), script)
+
+    def test_vendored_copy_wins_over_an_installed_sibling(self):
+        wslib._vendored_ballast_script = self._orig_vendored
+        plugins_root = tempfile.mkdtemp(prefix="ws_plugins_root_")
+        try:
+            own = os.path.join(plugins_root, "workstream")
+            os.makedirs(own)
+            scripts = os.path.join(plugins_root, "ballast", "scripts")
+            os.makedirs(scripts)
+            with open(os.path.join(scripts, "approve.py"), "w") as f:
+                f.write("# installed stub\n")
+            os.environ["CLAUDE_PLUGIN_ROOT"] = own
+            self.assertIn(os.path.join("vendor", "ballast"),
+                          wslib.ballast_script("approve.py"))
+        finally:
+            shutil.rmtree(plugins_root, ignore_errors=True)
 
     def test_adopt_precheck_ok_with_ballast(self):
         plugins_root = tempfile.mkdtemp(prefix="ws_plugins_root_")

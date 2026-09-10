@@ -211,3 +211,64 @@ git -C <vault> checkout <commit-before> -- .vault-meta/workstreams/<born_session
 Disabling the plugin stops further rewrites, but does not restore the 23
 already replaced - that is what the `git checkout` above is for. Nothing
 else this plugin writes needs reversing.
+
+## 0.1.6 - vendoring `ballast` + the `_global` policy rename
+
+Two things move in 0.1.6. Neither is a lazy per-scope rewrite like 0.1.4 -
+one is a packaging change with no live-data effect, the other is a
+one-time rename applied by hand at install.
+
+**1. Ballast becomes VENDORED, not an installed dependency.** Its engine
+(`ballast.py`, `ballast_lib.py`, `approve.py`, `policy.py`, `glossary.py`,
+`validate-scope.py`), the shim, and the gated skill templates (`policy`,
+`glossary`, `check`) are copied byte-identical into this plugin under
+`vendor/ballast/` + `shim/` + `skills/` by the ballast repo's
+`sync-templates.py` (see `docs/dependencies.md` -> "Vendoring `ballast`").
+`ballast` leaves this plugin's `plugin.json` `dependencies` array
+(dependencies are declared there, not per-entry in `marketplace.json`,
+which carries none). Consequences:
+
+- **No live-data migration.** Vendoring is a build-time packaging change:
+  the scope files under the state root are untouched by it. A session
+  after install runs on the vendored engine instead of a separately-
+  installed one, but reads and writes the SAME scope dirs.
+- **Self-contained install.** `workstream_lib` and the shim resolve
+  `vendor/ballast/` FIRST, so an installed `ballast` is no longer
+  required - it is only a fallback. Once this plugin is installed, the
+  `ballast` marketplace entry + its settings enable flag can be removed
+  and every bound session keeps running from the vendored copy. (That
+  de-plugin is a SECOND restart, after the one that ships 0.1.6 - the
+  fallback resolution is the safety net that makes the two-restart order
+  safe.)
+- **Version pin (pip-style).** The vendored engine's `ENGINE_VERSION`
+  must satisfy each scope's `min_engine` floor or every event no-ops
+  (fails open). This plugin bumps the ballast version it vendors only
+  when that version is known compatible; it does NOT auto-sync to latest.
+
+**2. The `_global` policy file is renamed** `_global/global-policy.md` ->
+`_global/policy.md`, and the `_global/ballast.json` `policy` field updates
+to match. ballast 0.2.0 dropped its dedicated global-policy template +
+`global-policy.md` from the gated filenames; "global" is now just a second
+policy scope, and this plugin OWNS the `global-policy` VERB (it drives the
+vendored `policy.py` against the `_global/` scope). The shared file's
+heading is unchanged - `_global/ballast.json` keeps `policy_title:
+"Global policy"`, a modular heading knob, so the injected block still
+reads "Global policy" even though the file on disk is now `policy.md`.
+
+This rename is applied by hand once, at the install for 0.1.6, against the
+live `_global/` scope - it is not a script and not lazy. The undo is the
+same git-history path as 0.1.4 (the state root is tracked and
+auto-committed):
+
+```
+git -C <vault> mv .vault-meta/workstreams/_global/policy.md .vault-meta/workstreams/_global/global-policy.md
+```
+
+then revert the `policy` field in `_global/ballast.json`.
+
+**Playbook keys, finally removed from live scopes (0.1.6).** 0.1.5 left
+the dead `playbook` / `playbook_inject_cap_bytes` / `playbook_file_warn_bytes`
+keys inert-but-present in scope files (see the 0.1.4 note above). The
+0.1.6 install also strips those keys from the live scope `ballast.json`
+files by hand while doing the `_global` rename - they were already inert,
+so removing them changes no behavior; it just cleans the files.

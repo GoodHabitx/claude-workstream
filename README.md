@@ -8,12 +8,35 @@ persona-less plugin (04-workstreams-plugin.md and its component pages,
 
 This repo ships the **core** - identity primitives, lifecycle-writing
 primitives, the boot/remind/precompact hooks, the fleet-views generator,
-and the Ballast wiring - plus **15 verb skills**: the twelve built against
+and the Ballast wiring - plus **16 verb skills**: the ones built against
 that core (`adopt · fork · refocus · close · absorb · notify · list ·
-graph · connect · manifest · policy · sidecar`), the read-only `status`,
-and the ones vendored from Ballast's own templates (`policy ·
-global-policy · glossary`). See
+graph · connect · manifest · sidecar`), the workstream-owned `global-policy`
+(which drives Ballast's `policy.py` against the shared `_global/` scope),
+the read-only `status`, and the ones vendored from Ballast's own templates
+(`policy · glossary · check`). Ballast's engine is **vendored** into
+`vendor/ballast/`, so the install is self-contained. See
 `docs/dependencies.md` and each script's own module docstring.
+
+## 0.1.6 changes
+
+- **Ballast is vendored - self-contained install.** Ballast is now a
+  repo-only library, not an installed plugin dependency. Its engine
+  (`ballast.py`, `ballast_lib.py`, `approve.py`, `policy.py`, `glossary.py`,
+  `validate-scope.py`) is copied byte-identical into `vendor/ballast/` by
+  the ballast repo's `sync-templates.py`, and the shim + `workstream_lib`
+  resolve that vendored copy FIRST (a separately-installed `ballast` is only
+  a fallback). `"ballast"` is dropped from `plugin.json` `dependencies`;
+  `adopt_precheck()` now refuses only when NO engine resolves at all.
+- **`global-policy` is workstream's own verb.** Ballast dropped its
+  `global-policy` template - "global" is just a second policy scope - so
+  this plugin owns the verb, driving the vendored `policy.py` against the
+  `_global/` scope. The shared file is renamed `_global/global-policy.md`
+  -> `_global/policy.md`.
+- **New vendored `check` skill.** A read-only scope health check (vendored
+  engine version vs `min_engine`, part sizes, gate, freshness); the vendored
+  template set is now `policy · glossary · check`.
+- **Re-vendored from Ballast 0.2.0.** shim + engine + the `policy`/
+  `glossary` templates re-synced; `sync-templates.py --check` clean.
 
 ## 0.1.5 changes
 
@@ -139,12 +162,16 @@ fixes D1 by construction: the identity block is this plugin's OWN hook's
 entire output, nowhere near the 9.7 KB cap, not the fourth block inside
 someone else's 22-37 KB payload.
 
-## Continuity is Ballast's, not this plugin's
+## Continuity runs on Ballast's engine, vendored in
 
 `hot.md`/`log.md`/`policy.md`/`glossary.md`/`index.md`
 inside each workstream's own dir are a **Ballast scope** (B1-B5), and
 `<state_root>/_global/` is a second, shared one every bound session reads
-on top of its own. Because this plugin owns *many* scopes -
+on top of its own. Ballast's engine is **vendored** into `vendor/ballast/`
+(byte-identical copies of its runtime scripts, synced by the ballast repo's
+`sync-templates.py`), so the install is self-contained; the shim resolves
+that vendored copy first, and a separately-installed `ballast` is only a
+fallback. Because this plugin owns *many* scopes -
 one per bound workstream directory, resolved at runtime from the
 session's own sidecar, not one static scope per plugin - it cannot use
 Ballast's static per-plugin hook template as-is (Ballast's own docs call
@@ -164,12 +191,13 @@ not sessions, and unbound is most sessions. Full wiring:
 ## Install
 
 Add the `workstream` entry from this marketplace's
-`.claude-plugin/marketplace.json`. Declares `ballast` (HARD - a verb that
-mints a manifest refuses without it, `workstream_lib.adopt_precheck()`),
-`vault-lock` (soft - one boot warning), `grill` (soft - an inline
-numbered-question round), and `session-mgmt` (soft - cross-session
-features off, docs pointer). See `docs/dependencies.md` for the full
-degrade table and exact messages.
+`.claude-plugin/marketplace.json`. Ballast is **VENDORED** (bundled under
+`vendor/ballast/` - no separate install; a manifest mint still refuses if
+NO engine resolves at all, `workstream_lib.adopt_precheck()`). Declares two
+soft plugin dependencies - `vault-lock` (one boot warning) and `grill` (an
+inline numbered-question round) - plus `session-mgmt` (soft - cross-session
+features off, docs pointer). See `docs/dependencies.md` for the full degrade
+table and exact messages.
 
 ## Verify
 

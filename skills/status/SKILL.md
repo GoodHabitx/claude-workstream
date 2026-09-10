@@ -48,8 +48,9 @@ trusted to describe it.
 
 ## What the output means
 
-- **`absent`** — the file does not exist. Normal for `glossary.md` and
-  `global-policy.md`, which are created only when something earns an entry.
+- **`absent`** — the file does not exist. Normal for `glossary.md` and the
+  global scope's `_global/policy.md`, which are created only when something
+  earns an entry.
 - **`disabled`** — the scope's `ballast.json` sets that class to `null`.
   A decision, not an absence.
 - **`no ballast.json at this scope`** — nothing has run a SessionStart
@@ -62,13 +63,14 @@ trusted to describe it.
   own `ballast.json` (`hot_cap_bytes`, `policy_cap_bytes`,
   `glossary_cap_bytes`). Adam's call, not this skill's.
 - **hot.md's per-slot lines** — each slot's length against schema v2's
-  own cap for it. Slot caps are read from the installed `ballast`; with
-  ballast absent the lengths still print and the caps read `unknown`.
+  own cap for it. Slot caps are read from the vendored `ballast` (resolved
+  vendored-first); if no ballast engine resolves the lengths still print
+  and the caps read `unknown`.
 
 ## Not this skill's job
 
 - Changing any of the five: `policy.md` → `workstream:policy`,
-  `global-policy.md` → `workstream:global-policy`, `glossary.md` →
+  `_global/policy.md` → `workstream:global-policy`, `glossary.md` →
   `workstream:glossary`, `workstream.json` → `workstream:manifest`.
   `hot.md` is the session's own to refresh, on Ballast's cadence.
 - Looking at ANOTHER workstream's live state: this prints files, and a

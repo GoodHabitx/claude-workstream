@@ -462,10 +462,13 @@ def find_problems(manifests):
 
 
 # --------------------------------------------------------------------------
-# dependency degrade detection (E1-E7): ballast HARD, vault-lock/grill soft.
-# Mirrors the resolution shim/ballast-shim.py itself uses (CLAUDE_PLUGIN_ROOT
-# sibling, then the installed-plugins registry), so this plugin's own
-# degrade checks agree with what the shim will actually find at hook time.
+# dependency degrade detection (E1-E7): ballast vendored (HARD), vault-lock/
+# grill soft. Mirrors the resolution shim/ballast-shim.py itself uses: the
+# copy VENDORED under this plugin's own vendor/ballast/ FIRST, then a
+# separately-installed ballast (CLAUDE_PLUGIN_ROOT sibling, then the
+# installed-plugins registry) as a fallback - so this plugin's own degrade
+# checks agree with what the shim finds at hook time, and a self-contained
+# install needs no separately-installed ballast at all.
 # --------------------------------------------------------------------------
 
 def _semver_dirs(home_dir):
@@ -562,17 +565,30 @@ def _ballast_marketplace_glob_hit(home):
     return _ballast_marketplace_script(home, "ballast.py") is not None
 
 
-def ballast_script(script_name):
-    """Absolute path to one of the INSTALLED ballast plugin's
-    `scripts/<script_name>`, or None when ballast cannot be found - the
-    same two path-based steps ballast_available() uses, in the same
-    order, so a caller that needs to actually RUN one of ballast's
-    scripts (manifest.py's approval gate runs `approve.py`) resolves it
-    exactly where the shim would.
+def _vendored_ballast_script(script_name):
+    """The copy this plugin vendors under its own `vendor/ballast/`, checked
+    FIRST so a self-contained install runs its own version-pinned engine and
+    never depends on a separately-installed `ballast`. This is the same
+    vendored-first resolution shim/ballast-shim.py applies at hook time."""
+    candidate = os.path.join(plugin_root(), "vendor", "ballast", script_name)
+    return candidate if os.path.isfile(candidate) else None
 
-    Deliberately does NOT consult the installed-plugins registry:
-    that step is a belief, not a path, and there is nothing to execute
-    at the end of it."""
+
+def ballast_script(script_name):
+    """Absolute path to a runnable ballast `<script_name>` - the copy
+    VENDORED under this plugin's own `vendor/ballast/` first, else a
+    separately-installed ballast's `scripts/<script_name>` - or None when
+    ballast can be found nowhere. The same resolution ballast_available()
+    uses, in the same order, so a caller that needs to actually RUN one of
+    ballast's scripts (manifest.py's approval gate runs `approve.py`)
+    resolves it exactly where the shim would.
+
+    Deliberately does NOT consult the installed-plugins registry as a path:
+    that step is a belief, not a path, and there is nothing to execute at
+    the end of it."""
+    vendored = _vendored_ballast_script(script_name)
+    if vendored:
+        return vendored
     for root in _plugin_roots():
         found = _script_under(os.path.join(root, "ballast"), script_name)
         if found:
@@ -599,14 +615,20 @@ def _ballast_in_installed_registry(home):
 
 
 def ballast_available():
-    """True if the `ballast` plugin is installed and visible to THIS
-    process, checked by a three-step fallback chain (2026-09-07 fork
-    incident: the first post-restart `/workstream:fork` had its
-    `adopt_precheck()` refuse the mint even though ballast 0.1.0 was
-    installed and its hooks were running - the precheck ran from a
-    skill's shell rather than a hook, so `CLAUDE_PLUGIN_ROOT` was unset
-    and the old single-path check saw nothing):
+    """True if a `ballast` engine is available to THIS process - the copy
+    VENDORED under this plugin's own `vendor/ballast/` (checked FIRST), else
+    a separately-installed `ballast` - via a vendored-first, then three-step
+    fallback chain (2026-09-07 fork incident: the first post-restart
+    `/workstream:fork` had its `adopt_precheck()` refuse the mint even
+    though ballast 0.1.0 was installed and its hooks were running - the
+    precheck ran from a skill's shell rather than a hook, so
+    `CLAUDE_PLUGIN_ROOT` was unset and the old single-path check saw
+    nothing):
 
+      0. `_vendored_ballast_script('ballast.py')` - this plugin's own
+         vendored engine. A self-contained install stops here and needs no
+         separately-installed ballast at all; the steps below are the
+         fallback for a consumer that does not vendor.
       1. `_plugin_present()`'s existing CLAUDE_PLUGIN_ROOT-sibling lookup
          - unchanged, and already correct whenever a hook set the env var.
       2. `_ballast_marketplace_glob_hit()` - scan every marketplace dir
@@ -621,6 +643,8 @@ def ballast_available():
     True if ANY step succeeds; no env var currently overrides this
     result (none exists in this plugin yet - honor one here if that
     changes)."""
+    if _vendored_ballast_script("ballast.py"):
+        return True
     if _plugin_present("ballast", os.path.join("scripts", "ballast.py")):
         return True
     home = os.environ.get("USERPROFILE") or os.environ.get("HOME")
@@ -650,8 +674,11 @@ def adopt_precheck():
     refuses to adopt: identity without continuity is today's defect, not
     a feature"). ok=True, message=None when clear to proceed."""
     if not ballast_available():
-        return False, ("workstream:adopt refuses - the `ballast` plugin is not "
-                       "installed. Identity without continuity is the defect this "
-                       "rebuild exists to fix, not a feature to ship anyway. "
-                       "Install `ballast` (staff-plugins marketplace), then retry.")
+        return False, ("workstream:adopt refuses - no `ballast` engine is "
+                       "available: none is vendored under this plugin's "
+                       "vendor/ballast/, and none is separately installed. "
+                       "Identity without continuity is the defect this rebuild "
+                       "exists to fix, not a feature to ship anyway. Re-vendor "
+                       "the engine (sync-templates.py from the ballast repo), "
+                       "or install `ballast`, then retry.")
     return True, None

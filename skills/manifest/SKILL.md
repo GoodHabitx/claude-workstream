@@ -78,8 +78,8 @@ project/spine node.
       approval, one write, whichever gated field it touches. A second
       gated write needs a second yes.
 
-   No approval can be minted if `ballast` is not installed; the refusal
-   says so and names the deliberate escape hatch
+   No approval can be minted if no `ballast` engine resolves (vendored or
+   installed); the refusal says so and names the deliberate escape hatch
    (`ballast-gate.disabled` under the state root), which is an operator
    decision, never this skill's to take.
 

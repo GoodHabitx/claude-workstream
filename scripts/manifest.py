@@ -115,11 +115,12 @@ NO_SCOPE = (
 )
 
 BALLAST_ABSENT = (
-    "manifest: %r is approval-gated, and the `ballast` plugin - which owns "
-    "the approval gate - is not installed anywhere this process can see, so "
-    "no approval can be minted or checked. Install `ballast` from the "
-    "staff-plugins marketplace, or, if this vault deliberately runs without "
-    "it, create %s under the state root to disarm the gate. A gated field is "
+    "manifest: %r is approval-gated, and no `ballast` engine is available - "
+    "none is vendored under this plugin's vendor/ballast/, and none is "
+    "separately installed - so no approval can be minted or checked. "
+    "Re-vendor the engine (sync-templates.py from the ballast repo), or "
+    "install `ballast`, or, if this vault deliberately runs without the "
+    "gate, create %s under the state root to disarm it. A gated field is "
     "never written unapproved."
 )
 

@@ -5,7 +5,7 @@ their contents VERBATIM.
 
 The five, in this order: `manifest` (workstream.json), `hot` (hot.md),
 `policy` (policy.md), `global-policy` (the shared
-`<state-root>/_global/global-policy.md`), `glossary` (glossary.md). No
+`<state-root>/_global/policy.md`), `glossary` (glossary.md). No
 argument prints all five; one argument prints that one. A file that does
 not exist prints `absent`; a file field the scope sets to `null` prints
 `disabled`.
@@ -20,10 +20,10 @@ Caps come from the scope's own `ballast.json`, falling back to the
 defaults ballast documents in `docs/ballast.json.md` when a key is absent
 - which is what an older, un-migrated scope looks like, and is worth
 seeing. hot.md additionally reports each slot's length against schema
-v2's per-slot cap; those caps are read from the INSTALLED ballast
-(`ballast_lib.HOT_SLOT_CAPS`), so there is one source of truth for them.
-With ballast absent, the slot lengths still print and the caps read
-`unknown`.
+v2's per-slot cap; those caps are read from the vendored ballast
+(`ballast_lib.HOT_SLOT_SPECS`, resolved vendored-first), so there is one
+source of truth for them. If no ballast engine resolves at all, the slot
+lengths still print and the caps read `unknown`.
 
 (interpreter caveat: neither `python3` nor `python` resolves on every
 host - on Windows use `py -3`.)
@@ -105,7 +105,8 @@ def scope_file(scope, key, ws_dir):
 def hot_slot_lines(text):
     """One `slot: <len>/<cap>` line per schema-v2 slot, in ballast's own
     table order. Falls back to printing lengths with `unknown` caps when
-    ballast is not installed - the lengths are still the useful half."""
+    no ballast engine resolves (vendored or installed) - the lengths are
+    still the useful half."""
     try:
         ballast_lib_path = wslib.ballast_script("ballast_lib.py")
         if not ballast_lib_path:
@@ -212,7 +213,7 @@ def build(vault, born_session, only=None, root=None):
             path, disabled = scope_file(global_scope, "policy", global_dir)
             if not os.path.isfile(os.path.join(global_dir, "ballast.json")) \
                     and not os.path.isdir(global_dir):
-                block = ["### global-policy - %s/global-policy.md"
+                block = ["### global-policy - %s/policy.md"
                          % os.path.relpath(global_dir, vault).replace(os.sep, "/"),
                          "absent - no _global/ scope has been seeded "
                          "(/workstream:global-policy creates it)"]

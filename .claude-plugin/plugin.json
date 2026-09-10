@@ -1,8 +1,8 @@
 {
   "name": "workstream",
   "displayName": "Workstream",
-  "description": "Gives a Claude Code session a durable name, a job, and relationships that survive every restart and compaction: a manifest + self-healing sidecar anchor identity on born_session; adopt/fork/refocus/close/absorb lifecycle; notify/list/graph/connect views; status prints the continuity files verbatim. Its own SessionStart emits the identity block directly from the manifest under the harness inline cap; UserPromptSubmit re-shows it every 25 turns. Continuity (hot/log/policy/glossary/index) is Ballast's, not this plugin's. Do NOT use for task ranking, calendar planning, or vault content decisions.",
-  "version": "0.1.5",
+  "description": "Gives a Claude Code session a durable name, a job, and relationships that survive every restart and compaction: a manifest + self-healing sidecar identity on born_session; adopt/fork/refocus/close/absorb lifecycle; notify/list/graph/connect views; status prints the continuity files. Its SessionStart emits the identity block under the harness inline cap; UserPromptSubmit re-shows it every 25 turns. Continuity (hot/log/policy/glossary/index) runs on Ballast's engine, vendored under vendor/ballast/, so the install is self-contained. Do NOT use for task ranking, calendar planning, or vault content decisions.",
+  "version": "0.1.6",
   "author": {
     "name": "Adam Weiner",
     "url": "https://github.com/GoodHabitx"
@@ -16,7 +16,6 @@
     "second-brain"
   ],
   "dependencies": [
-    "ballast",
     "vault-lock",
     "grill"
   ],

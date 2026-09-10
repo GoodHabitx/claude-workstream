@@ -23,7 +23,7 @@ omitted there, which is how an un-updated hook line keeps its pre-split
 behavior.
 
 `--scope-kind global` points the invocation at the SHARED scope,
-`<state-root>/_global/ballast.json` (global-policy.md - the rules every
+`<state-root>/_global/ballast.json` (policy.md - the shared rules every
 workstream reads), instead of this session's own workstream directory.
 It resolves nothing and prints nothing when the session is unbound or
 that file does not exist: an operator seeds `_global/` deliberately, and
@@ -55,7 +55,7 @@ Unbound sessions (no sidecar, or born_session doesn't resolve to an
 existing dir - the common case for most sessions/most turns): near-zero-
 cost no-op, exit 0, no output, no ballast invocation at all - with ONE
 exception, PreToolUse. Ballast's approval gate protects FILES under the
-state root (policy.md, global-policy.md, glossary.md), not
+state root (policy.md, glossary.md), not
 sessions, and this plugin is the only consumer that wires it: an unbound
 session skipping the gate would leave those files guarded in name
 only against the very population the docstring above calls the common

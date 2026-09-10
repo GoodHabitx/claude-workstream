@@ -1,6 +1,6 @@
 ---
 name: glossary
-description: Add, edit or delete a term in glossary.md, through Ballast's approval gate - show Adam the exact entry and the naming failure that justifies it, wait for his yes, mint, then let the primitive write. Trigger on "add a glossary entry", "we are using that word two ways". Do NOT use for standing rules (policy) or to define a term nothing has actually confused.
+description: Add, edit or delete a term in glossary.md, through Ballast's approval gate - show the operator the exact entry and the naming failure that justifies it, wait for a yes, mint, then let the primitive write. Trigger on "add a glossary entry", "we are using that word two ways". Do NOT use for standing rules (policy) or to define a term nothing has actually confused.
 ---
 <!-- ballast-template: glossary v1 -->
 
@@ -35,8 +35,9 @@ contradicting a newer one is the real failure, not growth.
 2. **Draft the entry** as one line: `- **term** — a one-line gloss`. The
    REASON is not part of the entry; it goes to `log.md`, because a
    definition with an argument attached is two things on one line.
-3. **Show Adam the EXACT entry**, plus the observed naming failure that
-   justifies it, and — for an edit or a delete — the entry as it stands.
+3. **Show the operator the EXACT entry**, plus the observed naming failure
+   that justifies it, and — for an edit or a delete — the entry as it
+   stands.
 4. **Wait for an explicit yes.**
 5. **Mint the approval, then write.**
 

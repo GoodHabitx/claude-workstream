@@ -337,18 +337,18 @@ class BallastDispatchExitCodeTests(unittest.TestCase):
 
     def test_the_vendored_shim_forwards_a_refusal_and_swallows_the_rest(self):
         """End to end through THIS plugin's own copied shim, against a stub
-        ballast.py installed as a sibling: exit 2 (and only 2) survives.
-        The 0.1.1 shim mapped every non-zero code to 0, which would have
-        left the whole PreToolUse gate wired and inert."""
+        VENDORED engine: exit 2 (and only 2) survives. The 0.1.1 shim mapped
+        every non-zero code to 0, which would have left the whole PreToolUse
+        gate wired and inert."""
         plugins_root = tempfile.mkdtemp(prefix="ws_plugins_root_")
         old_env = dict(os.environ)
         try:
             own_root = os.path.join(plugins_root, "workstream")
             shutil.copytree(PLUGIN_ROOT, own_root,
                             ignore=shutil.ignore_patterns(".git", "__pycache__"))
-            ballast_scripts = os.path.join(plugins_root, "ballast", "scripts")
-            os.makedirs(ballast_scripts)
-            stub = os.path.join(ballast_scripts, "ballast.py")
+            # The shim resolves the vendored engine first, so the stub goes
+            # where this plugin vendors ballast (copytree brought the dir).
+            stub = os.path.join(own_root, "vendor", "ballast", "ballast.py")
             os.environ["CLAUDE_PLUGIN_ROOT"] = own_root
 
             for code, expected in ((2, 2), (1, 0), (7, 0), (0, 0)):
@@ -522,7 +522,7 @@ class BallastDispatchUnboundGateTests(unittest.TestCase):
         the fallback scan - the gate only needs the state root, which every
         scope under it carries."""
         os.makedirs(self.global_dir)
-        proc = self._write(os.path.join(self.global_dir, "global-policy.md"))
+        proc = self._write(os.path.join(self.global_dir, "shared-policy.md"))
         self.assertEqual(proc.returncode, 0)
         self.assertIn("FAKE-SHIM-CALLED event=PreToolUse", proc.stdout)
         self.assertIn("born-u", proc.stdout)
@@ -530,7 +530,7 @@ class BallastDispatchUnboundGateTests(unittest.TestCase):
     def test_the_global_scopes_own_ballast_json_is_preferred_when_present(self):
         os.makedirs(self.global_dir)
         wslib.atomic_write_lf(os.path.join(self.global_dir, "ballast.json"), "{}\n")
-        proc = self._write(os.path.join(self.global_dir, "global-policy.md"))
+        proc = self._write(os.path.join(self.global_dir, "shared-policy.md"))
         self.assertIn("_global", proc.stdout)
         self.assertNotIn("born-u", proc.stdout)
 
@@ -543,7 +543,7 @@ class BallastDispatchUnboundGateTests(unittest.TestCase):
 
     def test_nothing_is_created_by_a_gate_check(self):
         os.makedirs(self.global_dir)
-        self._write(os.path.join(self.global_dir, "global-policy.md"))
+        self._write(os.path.join(self.global_dir, "shared-policy.md"))
         self._write(os.path.join(self.state_root, "born-new", "policy.md"))
         self.assertFalse(os.path.isfile(os.path.join(self.global_dir, "ballast.json")))
         self.assertFalse(os.path.exists(os.path.join(self.state_root, "born-new")))
@@ -639,29 +639,72 @@ class BallastDispatchRealShimFailOpenTests(unittest.TestCase):
         os.environ.update(self._old_env)
 
     def test_real_shim_fails_open_when_ballast_absent(self):
-        mprim.create_manifest(self.vault, "born-1", "ws1", "f")
-        sidecar.write(self.vault, "sess-1", "born-1")
-        proc = run_dispatch(self.vault, "SessionStart", PLUGIN_ROOT,
-                            json.dumps({"session_id": "sess-1"}))
-        self.assertEqual(proc.returncode, 0)
-        self.assertIn("no installed `ballast` plugin found", proc.stderr)
-
-    def test_real_shim_finds_and_invokes_a_sibling_ballast_install(self):
-        """End-to-end: ballast-dispatch -> the REAL copied shim -> a stub
-        ballast.py installed as a sibling plugin under CLAUDE_PLUGIN_ROOT's
-        own parent - confirms the whole chain resolves and runs when
-        ballast IS present, not just the absent-path."""
+        # Absent now means: no vendored engine AND no installed sibling. The
+        # real plugin tree carries vendor/ballast/, so copy it and remove the
+        # vendored copy to reach the fail-open path.
         plugins_root = tempfile.mkdtemp(prefix="ws_plugins_root_")
         try:
             own_root = os.path.join(plugins_root, "workstream")
-            shutil.copytree(PLUGIN_ROOT, own_root)
+            shutil.copytree(PLUGIN_ROOT, own_root,
+                            ignore=shutil.ignore_patterns(".git", "__pycache__"))
+            shutil.rmtree(os.path.join(own_root, "vendor"), ignore_errors=True)
+            mprim.create_manifest(self.vault, "born-1", "ws1", "f")
+            sidecar.write(self.vault, "sess-1", "born-1")
+            proc = run_dispatch(self.vault, "SessionStart", own_root,
+                                json.dumps({"session_id": "sess-1"}))
+            self.assertEqual(proc.returncode, 0)
+            self.assertIn("no ballast engine found", proc.stderr)
+        finally:
+            shutil.rmtree(plugins_root, ignore_errors=True)
+
+    def test_real_shim_invokes_the_vendored_engine_first(self):
+        """The production path: ballast-dispatch -> the REAL copied shim ->
+        the engine THIS plugin vendors under vendor/ballast/, ahead of any
+        installed sibling."""
+        plugins_root = tempfile.mkdtemp(prefix="ws_plugins_root_")
+        try:
+            own_root = os.path.join(plugins_root, "workstream")
+            shutil.copytree(PLUGIN_ROOT, own_root,
+                            ignore=shutil.ignore_patterns(".git", "__pycache__"))
+            # A sibling install exists too, but the vendored engine must win.
             ballast_scripts = os.path.join(plugins_root, "ballast", "scripts")
             os.makedirs(ballast_scripts)
             with open(os.path.join(ballast_scripts, "ballast.py"), "w") as f:
-                f.write("#!/usr/bin/env python3\n"
-                       "import sys\n"
-                       "sys.stdout.write('STUB-BALLAST-RAN argv=%r\\n' % (sys.argv[1:],))\n")
+                f.write("#!/usr/bin/env python3\nimport sys\n"
+                        "sys.stdout.write('SIBLING-RAN\\n')\n")
+            wslib.atomic_write_lf(
+                os.path.join(own_root, "vendor", "ballast", "ballast.py"),
+                "#!/usr/bin/env python3\nimport sys\n"
+                "sys.stdout.write('VENDORED-RAN argv=%r\\n' % (sys.argv[1:],))\n")
+            mprim.create_manifest(self.vault, "born-2", "ws2", "f")
+            sidecar.write(self.vault, "sess-2", "born-2")
+            os.environ["CLAUDE_PLUGIN_ROOT"] = own_root
+            proc = subprocess.run(
+                [sys.executable, os.path.join(own_root, "scripts", "ballast-dispatch.py"),
+                 "SessionStart", own_root],
+                cwd=self.vault, input=json.dumps({"session_id": "sess-2"}),
+                capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0)
+            self.assertIn("VENDORED-RAN", proc.stdout)
+            self.assertNotIn("SIBLING-RAN", proc.stdout)
+            self.assertIn("SessionStart", proc.stdout)
+        finally:
+            shutil.rmtree(plugins_root, ignore_errors=True)
 
+    def test_real_shim_falls_back_to_a_sibling_ballast_install(self):
+        """When no engine is vendored, the shim falls back to a sibling
+        ballast install - the restart-#1 safety net before de-plugin."""
+        plugins_root = tempfile.mkdtemp(prefix="ws_plugins_root_")
+        try:
+            own_root = os.path.join(plugins_root, "workstream")
+            shutil.copytree(PLUGIN_ROOT, own_root,
+                            ignore=shutil.ignore_patterns(".git", "__pycache__"))
+            shutil.rmtree(os.path.join(own_root, "vendor"), ignore_errors=True)
+            ballast_scripts = os.path.join(plugins_root, "ballast", "scripts")
+            os.makedirs(ballast_scripts)
+            with open(os.path.join(ballast_scripts, "ballast.py"), "w") as f:
+                f.write("#!/usr/bin/env python3\nimport sys\n"
+                        "sys.stdout.write('STUB-BALLAST-RAN argv=%r\\n' % (sys.argv[1:],))\n")
             mprim.create_manifest(self.vault, "born-2", "ws2", "f")
             sidecar.write(self.vault, "sess-2", "born-2")
             os.environ["CLAUDE_PLUGIN_ROOT"] = own_root

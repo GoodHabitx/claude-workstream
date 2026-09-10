@@ -27,10 +27,10 @@ every host — try `python3`, then `python`, then `py -3`, then `py`.)*
 1. **Hard-dependency precheck FIRST — before touching anything.** Call
    `workstream_lib.adopt_precheck()` (import the core lib, or run a
    one-liner: `python3 -c "import sys,os; sys.path.insert(0,'scripts'); import workstream_lib as w; ok,msg=w.adopt_precheck(); print(msg) if not ok else None; sys.exit(0 if ok else 1)"` from the plugin root). On `(False, msg)`
-   — Ballast is not installed — **print `msg` verbatim and STOP.**
-   Identity without continuity is the defect this plugin exists to fix,
-   not a feature to ship anyway (the HARD dependency, per
-   `docs/dependencies.md`).
+   — no ballast engine resolves (neither vendored nor installed) — **print
+   `msg` verbatim and STOP.** Identity without continuity is the defect
+   this plugin exists to fix, not a feature to ship anyway (the engine is
+   vendored under `vendor/ballast/`, per `docs/dependencies.md`).
 
 2. **Learn this session's identity.** Read the `<!-- workstream-session-id: ... -->` line boot.py injected. This is the
    candidate `born_session` (the bare uuid). If the line is missing,

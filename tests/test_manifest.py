@@ -165,12 +165,18 @@ class GatedTestCase(unittest.TestCase):
         os.environ["CLAUDE_PLUGIN_ROOT"] = self.own_root
         os.environ["HOME"] = tempfile.mkdtemp(prefix="ws_home_")
         os.environ.pop("USERPROFILE", None)
+        # vendor/ballast/ in the real plugin tree resolves FIRST and would
+        # shadow this stub just like a host install; neutralize it so the
+        # gate runs the deterministic stub this base installs.
+        self._orig_vendored = wslib._vendored_ballast_script
+        wslib._vendored_ballast_script = lambda name: None
         self.extra_setup()
 
     def extra_setup(self):
         pass
 
     def tearDown(self):
+        wslib._vendored_ballast_script = self._orig_vendored
         shutil.rmtree(self.vault, ignore_errors=True)
         shutil.rmtree(self.root, ignore_errors=True)
         shutil.rmtree(self.plugins_root, ignore_errors=True)
@@ -819,6 +825,11 @@ class ManifestCLIGateTests(GatedTestCase):
 
     def extra_setup(self):
         mprim.create_manifest(self.vault, "born-cli", "n", "f", root=self.root)
+        # The CLI runs manifest.py as a SUBPROCESS, which resolves the real
+        # vendored approve.py (the in-process vendored-neutralize does not
+        # cross the process boundary). Mint with that same approve.py so the
+        # token the CLI checks is one it recognizes.
+        self.approve_py = self._orig_vendored("approve.py")
 
     def _run(self, *args):
         env = dict(os.environ)

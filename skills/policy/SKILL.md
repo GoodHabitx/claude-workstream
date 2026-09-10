@@ -1,6 +1,6 @@
 ---
 name: policy
-description: Edit this workstream's standing rules in policy.md, through Ballast's approval gate - show Adam the exact text, wait for his yes, mint the approval, then let the primitive write. Trigger on "add a policy", "change the standing rules", "this workstream should always...". Do NOT use for the shared rules every workstream reads (that is global-policy) or for a glossary entry.
+description: Edit this scope's standing rules in policy.md, through Ballast's approval gate - show the operator the exact text, wait for a yes, mint the approval, then let the primitive write. Trigger on "add a policy", "change the standing rules", "this scope should always...". Do NOT use for a glossary entry (its own verb), or to write policy.md by hand (the gate refuses it).
 ---
 <!-- ballast-template: policy v1 -->
 
@@ -25,11 +25,12 @@ the consumer's own and survives a re-sync.
    stream of small edits. Apply the per-line test to every line you keep —
    "would removing this line cause a mistake?" — and drop the ones that
    fail it. This file is injected at every boot; length costs reasoning.
-3. **Show Adam the EXACT text.** Print the complete new `policy.md`,
-   verbatim, in the chat. Name what changed and what was dropped. Do not
-   summarise it — he is approving the text, not a description of it.
+3. **Show the operator the EXACT text.** Print the complete new
+   `policy.md`, verbatim, in the chat. Name what changed and what was
+   dropped. Do not summarise it — they are approving the text, not a
+   description of it.
 4. **Wait for an explicit yes.** Silence, "sounds good", or a reply to a
-   different question is not a yes. If he asks for changes, go back to
+   different question is not a yes. If they ask for changes, go back to
    step 3 with the revised full text.
 5. **Mint the approval, then write.** Write the approved text to a temp
    file, then:
@@ -46,8 +47,10 @@ the consumer's own and survives a re-sync.
 
 ## Not this skill's job
 
-- The shared rules EVERY workstream reads: that is `global-policy.md`, a
-  different file with a different scope and its own verb.
+- A different scope's standing rules: point this same verb at that scope's
+  own `ballast.json`. One mechanism, one `policy.md` per scope — a consumer
+  that wants an extra policy injected across all of its scopes wires a
+  second scope and drives this verb against it; the mechanism is unchanged.
 - A term definition (`glossary.md`) — its own gated verb and its own
   primitive.
 - Writing `policy.md` by hand: the gate refuses it, and that is the point.

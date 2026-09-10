@@ -83,11 +83,18 @@ class StatusTests(unittest.TestCase):
         os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
         os.environ["HOME"] = tempfile.mkdtemp(prefix="ws_home_")
         os.environ.pop("USERPROFILE", None)
+        # hot-slot caps come from ballast_lib via ballast_script, which now
+        # resolves the real vendored copy FIRST; these tests drive an
+        # installed/absent stub instead, so neutralize the vendored shortcut.
+        # (The vendored path has its own test below.)
+        self._orig_vendored = wslib._vendored_ballast_script
+        wslib._vendored_ballast_script = lambda name: None
         mprim.create_manifest(self.vault, "born-s", "status-ws", "print it")
         self.ws_dir = os.path.join(wslib.state_root(self.vault), "born-s")
         self.state_root = wslib.state_root(self.vault)
 
     def tearDown(self):
+        wslib._vendored_ballast_script = self._orig_vendored
         shutil.rmtree(self.vault, ignore_errors=True)
         os.environ.clear()
         os.environ.update(self._old_env)
@@ -224,6 +231,16 @@ class StatusTests(unittest.TestCase):
         finally:
             shutil.rmtree(plugins_root, ignore_errors=True)
 
+    def test_hot_slot_caps_come_from_the_vendored_ballast(self):
+        # Restore the vendored-first shortcut this class's setUp neutralizes:
+        # a self-contained install reads its slot caps from vendor/ballast/,
+        # with no separately-installed ballast anywhere.
+        wslib._vendored_ballast_script = self._orig_vendored
+        self.write("hot.md", HOT_FIXTURE)
+        out = self.build(only="hot")
+        self.assertNotIn("per-slot caps unknown", out)
+        self.assertIn("focus: 24/", out)
+
     # --- the global scope -----------------------------------------------
     def test_global_policy_says_no_global_scope_is_seeded(self):
         out = self.build(only="global-policy")
@@ -234,9 +251,9 @@ class StatusTests(unittest.TestCase):
         global_dir = os.path.join(self.state_root, "_global")
         os.makedirs(global_dir)
         wslib.atomic_write_json(os.path.join(global_dir, "ballast.json"),
-                                {"root": ".", "policy": "global-policy.md",
+                                {"root": ".", "policy": "shared-policy.md",
                                  "policy_cap_bytes": 4096})
-        self.write("global-policy.md", "- one rule for everyone\n", where=global_dir)
+        self.write("shared-policy.md", "- one rule for everyone\n", where=global_dir)
         out = self.build(only="global-policy")
         self.assertIn("24 B / 4,096 B cap (policy_cap_bytes)", out)
         self.assertIn("one rule for everyone", out)

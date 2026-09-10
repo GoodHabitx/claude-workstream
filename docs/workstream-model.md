@@ -71,12 +71,16 @@ under this plugin's own namespace** (`/workstream:<verb>`):
   `## Maintains` no longer lives here, see "Policy layer," below).
   **Vendored from Ballast's own template** (0.1.4), so the procedure that
   asks Adam is the same one every consumer of that gate runs.
-- `global-policy` — the same, for `<state_root>/_global/global-policy.md`:
-  the ONE rules file every bound session injects at boot on top of its own
-  `policy.md`. Vendored; creates the `_global/` scope (Ballast's
-  `fixtures/scope-global/ballast.json` plus an EMPTY `global-policy.md`)
+- `global-policy` — **workstream's own verb** (no longer vendored): it drives
+  Ballast's vendored `policy.py` against the `_global/` scope, whose policy
+  file is `<state_root>/_global/policy.md` — the ONE rules file every bound
+  session injects at boot on top of its own `policy.md`. Creates the
+  `_global/` scope (a global-scope `ballast.json` + an EMPTY `policy.md`)
   when it does not exist yet.
 - `glossary` — add, edit or delete a term in `glossary.md`. Vendored.
+- `check` — read-only health check for a Ballast scope (vendored engine
+  version vs the scope's `min_engine`, SessionStart part sizes, gate state,
+  freshness, whether a Stop would pass). Vendored from Ballast's template.
 - `status` — print this workstream's five artifacts (manifest, hot,
   policy, global-policy, glossary), each with its byte count
   against its cap and hot.md with its per-slot lengths, then the contents
@@ -132,8 +136,9 @@ the **bare uuid** — strip the `local_` prefix before writing it anywhere
   sidebar uuid (`get_session("self")`), writes the manifest via
   `manifest.py create`, and picks a free `name`. **Adopt refuses when a
   manifest with that name already exists** — you cannot birth what's
-  already alive — and **refuses outright if `ballast` is not installed**
-  (`workstream_lib.adopt_precheck()` — identity without continuity is the
+  already alive — and **refuses outright if no `ballast` engine resolves**
+  (vendored under `vendor/ballast/` or separately installed;
+  `workstream_lib.adopt_precheck()` — identity without continuity is the
   defect this rebuild exists to fix, not a feature to ship anyway).
 - **`sidecar self-heal`** — the mechanical, non-principal-confirmed fix
   for a missing or stale sidecar (the one real case `rebind` used to
@@ -409,7 +414,7 @@ wiki node, no vault-side storage at all.
   `docs/dependencies.md`). This plugin declares the scope; Ballast keeps
   the files fresh. `/workstream:status` prints any of them, with its size
   against the cap the scope declares.
-- `<state_root>/_global/ballast.json` + `global-policy.md` — the **global
+- `<state_root>/_global/ballast.json` + `policy.md` — the **global
   scope**: one shared rules file every bound session injects at boot on
   top of its own `policy.md`. A second `--scope`, nothing more — no code
   special-cases it, and nothing sums budget across the two. Seeded by
@@ -484,8 +489,8 @@ Six more hook commands, all through the one wrapper, which resolves which
 - **PreToolUse** (`Write|Edit|NotebookEdit`) — two refusals, in order:
   this wrapper's own (a direct write of any `workstream.json` under the
   state root — manifests go through `scripts/manifest.py`), then
-  Ballast's approval gate for policy.md / global-policy.md /
-  glossary.md.
+  Ballast's approval gate for policy.md / glossary.md (the global scope's
+  own policy.md included).
 
 Both refusals are the hook protocol's exit 2 with the reason on stderr,
 and the wrapper returns the shim's exit code VERBATIM. That last point is

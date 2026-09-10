@@ -9,14 +9,19 @@
 # open if absent."). Do not modify a consumer's copy — if the shim needs a
 # fix, fix it here and re-copy everywhere it's installed; a per-consumer
 # fork of this file defeats the point of having one canonical shim.
-"""ballast-shim.py EVENT --scope PATH [--vault-marker NAME] — resolves the
-installed `ballast` plugin's scripts/ballast.py and forwards argv + stdin
-to it verbatim.
+"""ballast-shim.py EVENT --scope PATH [--vault-marker NAME] — resolves
+ballast's engine (scripts/ballast.py) and forwards argv + stdin to it
+verbatim.
 
-Resolution (installed-plugins registry, not a relative path guess — a
-consumer plugin and the ballast plugin are siblings under the SAME
-plugins root, but that root's name/location is not fixed, so the shim
-reads the registry the harness itself writes):
+Resolution, in order:
+  0. A copy VENDORED inside the consumer itself —
+     `$CLAUDE_PLUGIN_ROOT/vendor/ballast/ballast.py`, or `ballast.py` beside
+     this shim, or `../vendor/ballast/ballast.py` relative to it — checked
+     FIRST, so a self-contained consumer that vendors ballast never depends
+     on a separately-installed one. The remaining steps are the fallback for
+     a consumer that does NOT vendor (a separately-installed `ballast`
+     plugin, found via the installed-plugins registry — not a relative-path
+     guess, since that root's name/location is not fixed):
   1. `CLAUDE_PLUGIN_ROOT` env var (set by the harness for every hook
      invocation) -> walk up to find the plugins root: the parent of
      CLAUDE_PLUGIN_ROOT's own plugin directory, i.e.
@@ -44,11 +49,11 @@ reads the registry the harness itself writes):
 Fails OPEN, always: if ballast cannot be found ANYWHERE by the above, or
 resolves but errors, this shim prints exactly ONE stderr notice and exits
 0 — a consumer must never fail its own hook (startup, a turn, a
-compaction) because ballast is not installed. The single exception is
-ballast's own PreToolUse approval refusal, exit 2, which is forwarded
-verbatim: swallowing it would turn every refusal into an allow. `no Ballast -> the plugin
-refuses to adopt` (per the decision register) is a CONSUMER-level policy
-decision made elsewhere (e.g. a workstream's own `adopt` verb checking for
+compaction) because ballast is absent. The single exception is ballast's
+own PreToolUse approval refusal, exit 2, which is forwarded verbatim:
+swallowing it would turn every refusal into an allow. Whether a missing
+ballast should block a consumer operation is a CONSUMER-level policy
+decision made elsewhere (e.g. a consumer's own `adopt` verb checking for
 ballast explicitly); this shim's only job is per-event forwarding, and it
 degrades silently by design.
 
@@ -138,7 +143,35 @@ def _plugins_roots_from_registry():
     return roots
 
 
+def _vendored_ballast_script():
+    """A copy VENDORED inside the consumer itself, checked FIRST so a
+    self-contained consumer never depends on a separately-installed ballast.
+    Tried three ways, most-reliable first:
+      * `$CLAUDE_PLUGIN_ROOT/vendor/ballast/ballast.py` — the consumer's own
+        plugin root (set by the harness) plus the vendor subdir;
+      * `ballast.py` beside this shim (shim vendored INTO vendor/ballast/);
+      * `../vendor/ballast/ballast.py` relative to this shim (shim kept in
+        the consumer's own shim/ dir)."""
+    candidates = []
+    own_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
+    if own_root:
+        candidates.append(os.path.join(os.path.normpath(own_root),
+                                       "vendor", "ballast", "ballast.py"))
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates.append(os.path.join(here, "ballast.py"))
+    candidates.append(os.path.join(os.path.dirname(here),
+                                   "vendor", "ballast", "ballast.py"))
+    for cand in candidates:
+        found = _try_path(cand)
+        if found:
+            return found
+    return None
+
+
 def resolve_ballast_script():
+    vendored = _vendored_ballast_script()
+    if vendored:
+        return vendored
     for root in _plugins_roots_from_env():
         found = _candidate_ballast_scripts(root)
         if found:
@@ -170,10 +203,11 @@ def main(argv):
     script = resolve_ballast_script()
     if script is None:
         sys.stderr.write(
-            "ballast-shim: no installed `ballast` plugin found (checked "
-            "CLAUDE_PLUGIN_ROOT-relative plugins roots and the "
-            "installed_plugins.json registry) — this consumer's ballast "
-            "event is a no-op this session; install the ballast plugin to "
+            "ballast-shim: no ballast engine found (checked the vendored "
+            "copy under vendor/ballast/, CLAUDE_PLUGIN_ROOT-relative plugins "
+            "roots, and the installed_plugins.json registry) — this "
+            "consumer's ballast event is a no-op this session; vendor "
+            "ballast into vendor/ballast/ (or install the ballast plugin) to "
             "restore continuity for this scope.\n")
         return 0
 
