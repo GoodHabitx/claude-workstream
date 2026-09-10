@@ -241,7 +241,13 @@ def report_gate_wiring(consumer):
     except ValueError as exc:
         print("        ERROR could not parse it: %s" % exc)
         return
-    entries = data.get("PreToolUse") if isinstance(data, dict) else None
+    # A real hooks.json nests events under a top-level "hooks" key
+    # ({"hooks": {"PreToolUse": [...]}}); the paste-in snippet is a bare
+    # event map. Read under "hooks" when present, else fall back to the
+    # top level so both shapes resolve.
+    container = data.get("hooks") if isinstance(data, dict) \
+        and isinstance(data.get("hooks"), dict) else data
+    entries = container.get("PreToolUse") if isinstance(container, dict) else None
     if not entries:
         print("        NO PreToolUse ENTRY — the gate is armed in ballast "
               "but nothing runs it for this consumer, so every write to a "
